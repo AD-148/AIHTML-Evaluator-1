@@ -1,0 +1,25 @@
+{
+    "devCommand": "npm run dev",
+    "buildCommand": "npm install && cd frontend && npm install && npm run build && cd ..",
+    "rewrites": [
+        {
+            "source": "/evaluate",
+            "destination": "/backend/main.py"
+        },
+        {
+            "source": "/(.*)",
+            "destination": "/frontend/dist/$1"
+        }
+    ],
+    "headers": [
+        {
+            "source": "/(.*)",
+            "headers": [
+                {
+                    "key": "Access-Control-Allow-Origin",
+                    "value": "*"
+                }
+            ]
+        }
+    ]
+}
