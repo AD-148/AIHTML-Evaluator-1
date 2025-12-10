@@ -1,0 +1,12 @@
+{
+    "name": "html-judge-root",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "install-frontend": "cd frontend && npm install",
+        "build": "npm run install-frontend && cd frontend && npm run build"
+    },
+    "engines": {
+        "node": ">=18"
+    }
+}

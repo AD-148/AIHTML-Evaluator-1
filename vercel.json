@@ -1,6 +1,6 @@
 {
     "devCommand": "npm run dev",
-    "buildCommand": "npm install && cd frontend && npm install && npm run build && cd ..",
+    "buildCommand": "npm run build",
     "rewrites": [
         {
             "source": "/evaluate",
