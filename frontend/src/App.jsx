@@ -1,136 +1,152 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import './index.css';
 
 const App = () => {
-  const [htmlInput, setHtmlInput] = useState(`<div class="card">\n  <h2>Hello World</h2>\n  <button>Click Me</button>\n</div>`);
+  // Chat History: Array of { role: 'user' | 'assistant', content: string | object }
+  // User content is simple text (or code wrapped in text).
+  // Assistant content is the JSON evaluation result.
+  const [chatHistory, setChatHistory] = useState([
+    { role: 'system', content: "I am your AI HTML Judge. Send me HTML code to evaluate." }
+  ]);
+
+  const [inputVal, setInputVal] = useState(`<div class="card">\n  <h2>Hello World</h2>\n  <button>Click Me</button>\n</div>`);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
+  const messagesEndRef = useRef(null);
 
-  const handleEvaluate = async () => {
-    if (!htmlInput.trim()) return;
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
+  useEffect(() => {
+    scrollToBottom();
+  }, [chatHistory]);
+
+  const handleSend = async () => {
+    if (!inputVal.trim()) return;
+
+    // Add User Message
+    const userMsg = { role: 'user', content: inputVal };
+    const newHistory = [...chatHistory, userMsg];
+    setChatHistory(newHistory);
     setLoading(true);
-    setError(null);
-    setResult(null);
+    setInputVal(""); // Clear input or keep it? Maybe clear for chat style.
 
     try {
+      // Prepare payload: filter out system greeting for API if helpful, or keep it.
+      // API expects strictly 'user' or 'assistant' roles usually, but our logic on backend prepends system prompt.
+      // We should send valid OpenAI-like messages.
+      const apiMessages = newHistory
+        .filter(m => m.role !== 'system') // Don't send the FE-only greeting
+        .map(m => ({
+          role: m.role,
+          content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+        }));
+
       const response = await fetch('/evaluate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ html_content: htmlInput }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: apiMessages }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Evaluation failed');
+        const err = await response.json();
+        throw new Error(err.detail || 'Evaluation failed');
       }
 
       const data = await response.json();
-      setResult(data);
+
+      // Add Assistant Message (Limit to what the UI needs, or store raw data?)
+      // Store raw data so we can render the Score Card
+      setChatHistory(prev => [...prev, { role: 'assistant', content: data }]);
+
     } catch (err) {
-      setError(err.message);
+      setChatHistory(prev => [...prev, { role: 'assistant', content: { error: err.message } }]);
     } finally {
       setLoading(false);
     }
   };
 
+  const renderMessage = (msg, index) => {
+    if (msg.role === 'system') {
+      return (
+        <div key={index} className="message system-message">
+          <i className="fa-solid fa-robot"></i> {msg.content}
+        </div>
+      );
+    }
+
+    if (msg.role === 'user') {
+      return (
+        <div key={index} className="message user-message">
+          <div className="message-label">You</div>
+          <pre className="code-block">{msg.content}</pre>
+        </div>
+      );
+    }
+
+    // Assistant Message (Evaluation Result)
+    if (msg.role === 'assistant') {
+      const result = msg.content;
+      if (result.error) {
+        return (
+          <div key={index} className="message ai-message error">
+            <strong>Error:</strong> {result.error}
+          </div>
+        )
+      }
+
+      return (
+        <div key={index} className="message ai-message">
+          <div className="message-label">AI Judge</div>
+          <div className="scores-row">
+            <span className={`score-badge ${getScoreColor(result.score_fidelity)}`}>Fidelity: {result.score_fidelity}</span>
+            <span className={`score-badge ${getScoreColor(result.score_syntax)}`}>Syntax: {result.score_syntax}</span>
+            <span className={`score-badge ${getScoreColor(result.score_accessibility)}`}>A11y: {result.score_accessibility}</span>
+          </div>
+
+          <div className="rationale-text">
+            {result.rationale}
+          </div>
+
+          <div className="verdict-text">
+            <strong>Verdict:</strong> {result.final_judgement}
+          </div>
+        </div>
+      );
+    }
+  };
+
   const getScoreColor = (score) => {
-    if (score >= 80) return 'text-high';
-    if (score >= 60) return 'text-mid';
-    return 'text-low';
+    if (score >= 80) return 'score-high';
+    if (score >= 60) return 'score-mid';
+    return 'score-low';
   };
 
   return (
-    <div className="app-container">
+    <div className="app-container chat-layout">
       <header>
-        <h1>AI HTML Judge</h1>
-        <p className="subtitle">Evaluate Fidelity, Syntax, and Accessibility with LLM Logic</p>
+        <h1>AI HTML Judge (Chat Mode)</h1>
       </header>
 
-      <main className="main-grid">
-        {/* Left Panel: Input */}
-        <div className="card input-card">
-          <div className="section-title">
-            <i className="fa-solid fa-code"></i> Input HTML
-          </div>
-          <textarea
-            value={htmlInput}
-            onChange={(e) => setHtmlInput(e.target.value)}
-            placeholder="Paste your HTML code here..."
-            spellCheck="false"
-          />
-          <div className="action-bar">
-            <button onClick={handleEvaluate} disabled={loading || !htmlInput.trim()}>
-              {loading ? <span style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>Analying...</span> : 'Evaluate Code'}
-            </button>
-          </div>
-        </div>
+      <div className="chat-window">
+        {chatHistory.map(renderMessage)}
+        {loading && <div className="message system-message">Thinking...</div>}
+        <div ref={messagesEndRef} />
+      </div>
 
-        {/* Right Panel: Results */}
-        <div className="card results-card">
-          <div className="section-title">
-            <i className="fa-solid fa-chart-pie"></i> Analysis Report
-          </div>
-
-          {error && (
-            <div style={{ color: '#ef4444', padding: '1rem', background: 'rgba(239,68,68,0.1)', borderRadius: '0.5rem' }}>
-              Error: {error}
-            </div>
-          )}
-
-          {!result && !loading && !error && (
-            <div className="results-placeholder">
-              <i className="fa-solid fa-robot" style={{ fontSize: '3rem', marginBottom: '1rem' }}></i>
-              <p>Submit HTML code to see the AI evaluation.</p>
-            </div>
-          )}
-
-          {loading && (
-            <div className="results-placeholder">
-              <div className="loading-spinner"></div>
-              <p>Processing with LLM...</p>
-            </div>
-          )}
-
-          {result && (
-            <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-              <div className="scores-container">
-                <div className="score-card">
-                  <div className={`score-value ${getScoreColor(result.score_fidelity)}`}>
-                    {result.score_fidelity}
-                  </div>
-                  <div className="score-label">Fidelity</div>
-                </div>
-                <div className="score-card">
-                  <div className={`score-value ${getScoreColor(result.score_syntax)}`}>
-                    {result.score_syntax}
-                  </div>
-                  <div className="score-label">Syntax</div>
-                </div>
-                <div className="score-card">
-                  <div className={`score-value ${getScoreColor(result.score_accessibility)}`}>
-                    {result.score_accessibility}
-                  </div>
-                  <div className="score-label">Accessibility</div>
-                </div>
-              </div>
-
-              <div className="section-title" style={{ fontSize: '1rem' }}>Rationale</div>
-              <div className="rationale-box">
-                {result.rationale}
-              </div>
-
-              <div className="judgement-box">
-                <span style={{ opacity: 0.7 }}>Verdict: </span>
-                {result.final_judgement}
-              </div>
-            </div>
-          )}
-        </div>
-      </main>
+      <div className="input-area">
+        <textarea
+          value={inputVal}
+          onChange={(e) => setInputVal(e.target.value)}
+          placeholder="Enter HTML or ask for changes..."
+          onKeyDown={(e) => {
+            if (e.ctrlKey && e.key === 'Enter') handleSend();
+          }}
+        />
+        <button onClick={handleSend} disabled={loading || !inputVal.trim()}>
+          Send
+        </button>
+      </div>
     </div>
   );
 };
