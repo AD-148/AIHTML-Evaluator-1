@@ -4,7 +4,10 @@ from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
-from llm_service import analyze_html, EvaluationResult
+try:
+    from .llm_service import analyze_html, EvaluationResult
+except ImportError:
+    from llm_service import analyze_html, EvaluationResult
 
 load_dotenv()
 
