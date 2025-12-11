@@ -14,6 +14,7 @@ class EvaluationResult(BaseModel):
     score_accessibility: int = Field(..., description="0-100 score for accessibility standards (WCAG)")
     rationale: str = Field(..., description="Detailed explanation of the scores")
     final_judgement: str = Field(..., description="Brief summary judgement")
+    fixed_html: Optional[str] = Field(None, description="The improved/fixed HTML code if requested by the user")
 
 SYSTEM_PROMPT = """
 You are an expert Frontend QA Engineer and AI Judge. 
@@ -22,39 +23,44 @@ Your task is to evaluate the provided HTML code snippet based on the following c
 2. Syntax: Is the HTML valid? Are tags closed? (0-100)
 3. Accessibility: Does it follow basic accessibility principles? (0-100)
 
+If the user asks to FIX or IMPROVE the code, or if you find critical errors, provide the full corrected HTML in the 'fixed_html' field.
+
 Return the output strictly as a JSON object matching this structure:
 {
     "score_fidelity": int,
     "score_syntax": int,
     "score_accessibility": int,
     "rationale": "string explanation",
-    "final_judgement": "string summary"
+    "final_judgement": "string summary",
+    "fixed_html": "string (optional, only if fixes requested)"
 }
 """
 
-async def analyze_html(html_content: str) -> EvaluationResult:
+from typing import List
+
+async def analyze_chat(messages: List[dict]) -> EvaluationResult:
     api_key = os.getenv("OPENAI_API_KEY")
     
-    # MOCK MODE: If no API key is set, return a dummy result so the UI can be tested.
+    # MOCK MODE
     if not api_key:
         print("No API Key found. Returning mock data.")
         return EvaluationResult(
             score_fidelity=85,
             score_syntax=90,
             score_accessibility=60,
-            rationale="[MOCK] The HTML structure is generally valid. However, some accessibility attributes like 'alt' for images might be missing. This is a generated mock response because no OpenAI API key was found in the environment variables.",
-            final_judgement="Good start, but needs accessibility improvements."
+            rationale="[MOCK] This is a mock response because OPENAI_API_KEY is missing. I see your previous messages and applied context.",
+            final_judgement="Good start (Mock)"
         )
 
     client = AsyncOpenAI(api_key=api_key)
 
+    # Prepend system prompt to the conversation history
+    full_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
+
     try:
         response = await client.chat.completions.create(
-            model="gpt-4o", # Or gpt-3.5-turbo
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Evaluate this HTML:\n\n{html_content}"}
-            ],
+            model="gpt-4o",
+            messages=full_messages,
             response_format={"type": "json_object"}
         )
         
@@ -64,7 +70,6 @@ async def analyze_html(html_content: str) -> EvaluationResult:
     
     except Exception as e:
         print(f"Error calling LLM: {e}")
-        # Fallback error response
         return EvaluationResult(
             score_fidelity=0,
             score_syntax=0,
