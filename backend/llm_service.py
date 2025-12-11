@@ -32,31 +32,29 @@ Return the output strictly as a JSON object matching this structure:
 }
 """
 
-from typing import List
-
-async def analyze_chat(messages: List[dict]) -> EvaluationResult:
+async def analyze_html(html_content: str) -> EvaluationResult:
     api_key = os.getenv("OPENAI_API_KEY")
     
-    # MOCK MODE
+    # MOCK MODE: If no API key is set, return a dummy result so the UI can be tested.
     if not api_key:
         print("No API Key found. Returning mock data.")
         return EvaluationResult(
             score_fidelity=85,
             score_syntax=90,
             score_accessibility=60,
-            rationale="[MOCK] This is a mock response because OPENAI_API_KEY is missing. I see your previous messages and applied context.",
-            final_judgement="Good start (Mock)"
+            rationale="[MOCK] The HTML structure is generally valid. However, some accessibility attributes like 'alt' for images might be missing. This is a generated mock response because no OpenAI API key was found in the environment variables.",
+            final_judgement="Good start, but needs accessibility improvements."
         )
 
     client = AsyncOpenAI(api_key=api_key)
 
-    # Prepend system prompt to the conversation history
-    full_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
-
     try:
         response = await client.chat.completions.create(
-            model="gpt-4o",
-            messages=full_messages,
+            model="gpt-4o", # Or gpt-3.5-turbo
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": f"Evaluate this HTML:\n\n{html_content}"}
+            ],
             response_format={"type": "json_object"}
         )
         
@@ -66,6 +64,7 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
     
     except Exception as e:
         print(f"Error calling LLM: {e}")
+        # Fallback error response
         return EvaluationResult(
             score_fidelity=0,
             score_syntax=0,

@@ -1,14 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
-
 try:
-    from .llm_service import analyze_chat, EvaluationResult
+    from .llm_service import analyze_html, EvaluationResult
 except ImportError:
-    from llm_service import analyze_chat, EvaluationResult
+    from llm_service import analyze_html, EvaluationResult
 
 load_dotenv()
 
@@ -24,31 +23,24 @@ app.add_middleware(
 )
 
 
-class Message(BaseModel):
-    role: str
-    content: str
 
-class ChatInput(BaseModel):
-    messages: List[Message]
-    model_provider: Optional[str] = "openai"
+class HTMLInput(BaseModel):
+    html_content: str
+    model_provider: Optional[str] = "openai" # placeholder for future expansion
 
 @app.get("/")
 def read_root():
     return {"message": "HTML LLM Judge API is running"}
 
 @app.post("/evaluate", response_model=EvaluationResult)
-async def evaluate_conversation(input_data: ChatInput):
-    if not input_data.messages:
-        raise HTTPException(status_code=400, detail="Messages cannot be empty")
+async def evaluate_html(input_data: HTMLInput):
+    if not input_data.html_content.strip():
+        raise HTTPException(status_code=400, detail="HTML content cannot be empty")
     
     try:
-        # Convert Pydantic models to dicts
-        msgs = [m.model_dump() for m in input_data.messages]
-        result = await analyze_chat(msgs)
+        result = await analyze_html(input_data.html_content)
         return result
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 from fastapi.staticfiles import StaticFiles
