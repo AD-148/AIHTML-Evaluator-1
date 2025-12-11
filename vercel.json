@@ -5,7 +5,7 @@
     "rewrites": [
         {
             "source": "/evaluate",
-            "destination": "/backend/main.py"
+            "destination": "/api/index.py"
         },
         {
             "source": "/(.*)",
