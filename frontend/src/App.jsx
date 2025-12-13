@@ -36,6 +36,7 @@ const App = () => {
       // Add assistant response to history
       setChatHistory(prev => [...prev, { role: 'assistant', content: data }]);
     } catch (err) {
+      console.error("Evaluation error:", err);
       setLatestAnalysis({ error: err.message });
       setChatHistory(prev => [...prev, { role: 'assistant', content: { error: err.message } }]);
     } finally {
@@ -69,6 +70,7 @@ const App = () => {
       // Let's assume for now the AI puts code in 'rationale' if asked.
 
     } catch (err) {
+      console.error("Chat error:", err);
       setChatHistory(prev => [...prev, { role: 'assistant', content: { error: err.message } }]);
     } finally {
       setLoading(false);
@@ -93,8 +95,18 @@ const App = () => {
     });
 
     if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.detail || 'Request failed');
+      let errorDetail = 'Request failed';
+      try {
+        const err = await response.json();
+        errorDetail = err.detail || errorDetail;
+      } catch (parseErr) {
+        console.error("Error parsing error response:", parseErr);
+        // Fallback if response isn't JSON
+        const text = await response.text();
+        errorDetail = text || errorDetail;
+      }
+      console.error(`API Error (${response.status}):`, errorDetail);
+      throw new Error(errorDetail);
     }
     return await response.json();
   };

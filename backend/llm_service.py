@@ -38,12 +38,16 @@ Return the output strictly as a JSON object matching this structure:
 
 from typing import List
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 async def analyze_chat(messages: List[dict]) -> EvaluationResult:
     api_key = os.getenv("OPENAI_API_KEY")
     
     # MOCK MODE
     if not api_key:
-        print("No API Key found. Returning mock data.")
+        logger.warning("No API Key found. Returning mock data.")
         return EvaluationResult(
             score_fidelity=85,
             score_syntax=90,
@@ -69,7 +73,7 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
         return EvaluationResult(**data)
     
     except Exception as e:
-        print(f"Error calling LLM: {e}")
+        logger.error(f"Error calling LLM: {e}", exc_info=True)
         return EvaluationResult(
             score_fidelity=0,
             score_syntax=0,

@@ -47,8 +47,7 @@ async def evaluate_conversation(input_data: ChatInput):
         result = await analyze_chat(msgs)
         return result
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error evaluating conversation: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 from fastapi.staticfiles import StaticFiles
@@ -63,6 +62,20 @@ if not os.environ.get("VERCEL"):
     if os.path.exists(frontend_path):
         app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
 
+import logging
+import sys
+
+# Configure Logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
+
 if __name__ == "__main__":
     import uvicorn
+    logger.info("Starting Backend Server...")
     uvicorn.run(app, host="0.0.0.0", port=8000)
