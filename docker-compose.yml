@@ -14,6 +14,13 @@ services:
     restart: always
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf
+      # Share Certbot challenge directory with Host
+      - /var/www/certbot:/var/www/certbot
+      # Read Certs from Host
+      - /etc/letsencrypt:/etc/letsencrypt
     depends_on:
       - backend
     networks:
