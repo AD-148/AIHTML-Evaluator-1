@@ -148,6 +148,16 @@ const App = () => {
     return htmlInput;
   };
 
+  // 3. Apply Fix Feature
+  const handleApplyFix = (fixedHtml) => {
+    if (!fixedHtml) return;
+    setHtmlInput(fixedHtml);
+    // Optional: Switch to analysis tab to verify? Or just show a toast?
+    // For now, let's keep it simple.
+    // If we are in 'chat', maybe we want to see the preview?
+    // Let's force a preview update effectively by updating the input.
+  };
+
   return (
     <div className="app-container">
       <header>
@@ -262,9 +272,26 @@ const App = () => {
                             {/* Just show rationale in chat for brevity */}
                             <div style={{ marginBottom: '0.5rem' }}>{msg.content.rationale}</div>
                             {/* Show concise scores */}
-                            <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>
+                            <div style={{ fontSize: '0.8rem', opacity: 0.7, marginBottom: '0.5rem' }}>
                               F: {msg.content.score_fidelity} | S: {msg.content.score_syntax} | A: {msg.content.score_accessibility}
                             </div>
+                            {/* Apply Fix Button */}
+                            {msg.content.fixed_html && (
+                              <button
+                                onClick={() => handleApplyFix(msg.content.fixed_html)}
+                                style={{
+                                  fontSize: '0.8rem',
+                                  padding: '0.3rem 0.6rem',
+                                  background: '#22c55e',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '0.3rem',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <i className="fa-solid fa-check"></i> Apply Fix to Editor
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -296,12 +323,26 @@ const App = () => {
               <div className="fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                 <div className="preview-toolbar" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.9rem', color: '#94a3b8' }}>Rendering safe HTML</span>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(getPreviewCode())}
-                    style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', background: '#334155' }}
-                  >
-                    Copy Code
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    {/* Show Apply button in Preview if we are viewing a 'fixed' version that is different from input? 
+                         Currently getPreviewCode returns fixed_html if present. 
+                         So if what we are seeing is NOT what is in the editor, allow applying it.
+                     */}
+                    {getPreviewCode() !== htmlInput && (
+                      <button
+                        onClick={() => handleApplyFix(getPreviewCode())}
+                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', background: '#22c55e', border: 'none', borderRadius: '0.3rem', color: 'white', cursor: 'pointer' }}
+                      >
+                        Apply Fix
+                      </button>
+                    )}
+                    <button
+                      onClick={() => navigator.clipboard.writeText(getPreviewCode())}
+                      style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', background: '#334155', border: 'none', borderRadius: '0.3rem', color: 'white', cursor: 'pointer' }}
+                    >
+                      Copy Code
+                    </button>
+                  </div>
                 </div>
                 <div className="preview-frame-container" style={{ flex: 1, background: 'white', borderRadius: '0.5rem', overflow: 'hidden' }}>
                   {/* We use an iframe to isolate styles */}
