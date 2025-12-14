@@ -16,5 +16,9 @@ COPY . .
 # Make port 8000 available to the world outside this container
 EXPOSE 8000
 
+# Create a non-root user and switch to it
+RUN useradd -m -u 1000 appuser
+USER appuser
+
 # Run app.py when the container launches
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

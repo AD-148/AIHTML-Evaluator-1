@@ -349,6 +349,7 @@ const App = () => {
                   <iframe
                     title="preview"
                     srcDoc={getPreviewCode()}
+                    sandbox="allow-scripts"
                     style={{ width: '100%', height: '100%', border: 'none' }}
                   />
                 </div>
