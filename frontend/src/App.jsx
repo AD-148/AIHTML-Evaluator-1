@@ -9,119 +9,18 @@ const App = () => {
   const [latestAnalysis, setLatestAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [chatInput, setChatInput] = useState("");
+  const [showJson, setShowJson] = useState(false); // Toggle for JSON view
   const messagesEndRef = useRef(null);
-
-  // Ref to track if we just did an initial analysis (to auto-switch tabs)
-  const isInitialAnalysis = useRef(true);
-
-  // --- ACTIONS ---
-
-  // 1. Initial Evaluation (triggered from Left Panel)
-  const handleEvaluate = async () => {
-    if (!htmlInput.trim()) return;
-
-    setLoading(true);
-    setLatestAnalysis(null);
-    setActiveTab('analysis');
-    isInitialAnalysis.current = true;
-
-    // Reset Chat History with the new context
-    const initialMsg = { role: 'user', content: `Evaluate this HTML:\n${htmlInput}` };
-    const newHistory = [initialMsg];
-    setChatHistory(newHistory);
-
-    try {
-      const data = await callApi(newHistory);
-      setLatestAnalysis(data);
-      // Add assistant response to history
-      setChatHistory(prev => [...prev, { role: 'assistant', content: data }]);
-    } catch (err) {
-      console.error("Evaluation error:", err);
-      setLatestAnalysis({ error: err.message });
-      setChatHistory(prev => [...prev, { role: 'assistant', content: { error: err.message } }]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 2. Chat Interaction (triggered from Chat Tab)
-  const handleChatSend = async () => {
-    if (!chatInput.trim()) return;
-
-    const userMsg = { role: 'user', content: chatInput };
-    const newHistory = [...chatHistory, userMsg];
-    setChatHistory(newHistory);
-    setChatInput("");
-    setLoading(true);
-    isInitialAnalysis.current = false;
-
-    try {
-      const data = await callApi(newHistory);
-      setChatHistory(prev => [...prev, { role: 'assistant', content: data }]);
-
-      // If the response contains a "final_judgement" that looks like code, or if we want to update preview
-      // Ideally, the Preview tab should show the latest HTML discussed. 
-      // For now, Preview shows the Input HTML unless the AI explicitly outputted new HTML.
-      // Since our current backend returns JSON evaluation, maybe we need to ask AI to output code in a specific field?
-      // Or we infer it. The current prompt asks for JSON scores.
-      // For "Fix this", the prompt might need adjustment, or we assume the AI handles it within 'rationale' or we need a new field.
-      // *Correction*: The current backend ONLY returns JSON scores. 
-      // To get fixed HTML, the AI needs to put it in 'rationale' or we need a code field. 
-      // Let's assume for now the AI puts code in 'rationale' if asked.
-
-    } catch (err) {
-      console.error("Chat error:", err);
-      setChatHistory(prev => [...prev, { role: 'assistant', content: { error: err.message } }]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const callApi = async (messages) => {
-    // Filter out internal system messages if any (we don't have them yet)
-    // Map content objects to strings if needed, but our backend expects objects or strings?
-    // Backend expects: List[Message] where Message is { role, content: str }
-    // But our history has 'content' as objects for Assistant. We need to stringify them.
-
-    const apiMessages = messages.map(m => ({
-      role: m.role,
-      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
-    }));
-
-    const response = await fetch('/evaluate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: apiMessages }),
-    });
-
-    if (!response.ok) {
-      let errorDetail = 'Request failed';
-      try {
-        const err = await response.json();
-        errorDetail = err.detail || errorDetail;
-      } catch (parseErr) {
-        console.error("Error parsing error response:", parseErr);
-        // Fallback if response isn't JSON
-        const text = await response.text();
-        errorDetail = text || errorDetail;
-      }
-      console.error(`API Error (${response.status}):`, errorDetail);
-      throw new Error(errorDetail);
-    }
-    return await response.json();
-  };
-
-  // Auto-scroll chat
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatHistory, activeTab]);
-
 
   // --- RENDER HELPERS ---
 
   const getScoreColor = (score) => {
+    // User requested 70 as the threshold.
+    // High: >= 80 (Green)
+    // Mid: 70-79 (Yellow/Orange)
+    // Low: < 70 (Red)
     if (score >= 80) return 'text-high';
-    if (score >= 60) return 'text-mid';
+    if (score >= 70) return 'text-mid';
     return 'text-low';
   };
 
@@ -148,14 +47,94 @@ const App = () => {
     return htmlInput;
   };
 
+  // --- ACTIONS ---
+
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatHistory, loading, activeTab]);
+
+  const callApi = async (messages) => {
+    // Backend expects: { messages: [ { role, content } ] }
+    // We ensure content is stringified if it's an object (assistant response)
+    const apiMessages = messages.map(m => ({
+      role: m.role,
+      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+    }));
+
+    const response = await fetch('/evaluate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: apiMessages }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ detail: 'Request failed' }));
+      throw new Error(err.detail || 'Request failed');
+    }
+    return await response.json();
+  };
+
+  // 1. Evaluate Action
+  const handleEvaluate = async () => {
+    if (!htmlInput.trim()) return;
+
+    setLoading(true);
+    setLatestAnalysis(null);
+    setActiveTab('analysis');
+    setShowJson(false);
+
+    // Provide context directly in the first message
+    const initialMsg = { role: 'user', content: `Evaluate this HTML:\n${htmlInput}` };
+    const newHistory = [initialMsg];
+    setChatHistory(newHistory);
+
+    try {
+      const data = await callApi(newHistory);
+      setLatestAnalysis(data);
+      setChatHistory(prev => [...prev, { role: 'assistant', content: data }]);
+    } catch (err) {
+      console.error("Evaluation error:", err);
+      setLatestAnalysis({ error: err.message });
+      setChatHistory(prev => [...prev, { role: 'assistant', content: { error: err.message } }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 2. Chat Action
+  const handleChatSend = async () => {
+    if (!chatInput.trim() || loading) return;
+
+    const userMsg = { role: 'user', content: chatInput };
+    const newHistory = [...chatHistory, userMsg];
+    setChatHistory(newHistory);
+    setChatInput("");
+    setLoading(true);
+
+    try {
+      const data = await callApi(newHistory);
+      setChatHistory(prev => [...prev, { role: 'assistant', content: data }]);
+
+      // If we got a full evaluation result back (which we always do from /evaluate),
+      // update the latest analysis view too.
+      if (data.score_fidelity !== undefined) {
+        setLatestAnalysis(data);
+      }
+    } catch (err) {
+      console.error("Chat error:", err);
+      setChatHistory(prev => [...prev, { role: 'assistant', content: { error: err.message } }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // 3. Apply Fix Feature
   const handleApplyFix = (fixedHtml) => {
     if (!fixedHtml) return;
     setHtmlInput(fixedHtml);
-    // Optional: Switch to analysis tab to verify? Or just show a toast?
-    // For now, let's keep it simple.
-    // If we are in 'chat', maybe we want to see the preview?
-    // Let's force a preview update effectively by updating the input.
   };
 
   return (
@@ -240,12 +219,36 @@ const App = () => {
                         <div className={`score-value ${getScoreColor(latestAnalysis.score_accessibility)}`}>{latestAnalysis.score_accessibility}</div>
                         <div className="score-label">Accessibility</div>
                       </div>
+                      <div className="score-card">
+                        <div className={`score-value ${getScoreColor(latestAnalysis.score_responsiveness || 0)}`}>{latestAnalysis.score_responsiveness || 'N/A'}</div>
+                        <div className="score-label">Responsiveness</div>
+                      </div>
+                      <div className="score-card">
+                        <div className={`score-value ${getScoreColor(latestAnalysis.score_visual || 0)}`}>{latestAnalysis.score_visual || 'N/A'}</div>
+                        <div className="score-label">Visual</div>
+                      </div>
                     </div>
                     <div className="section-title" style={{ fontSize: '1rem' }}>Rationale</div>
                     <div className="rationale-box">{latestAnalysis.rationale}</div>
                     <div className="judgement-box">
                       <span style={{ opacity: 0.7 }}>Verdict: </span>{latestAnalysis.final_judgement}
                     </div>
+
+                    {/* JSON VIEW TOGGLE */}
+                    <div style={{ marginTop: '1rem' }}>
+                      <button
+                        onClick={() => setShowJson(!showJson)}
+                        style={{ background: 'transparent', border: '1px solid #334155', color: '#94a3b8', padding: '0.4rem 0.8rem', borderRadius: '0.3rem', cursor: 'pointer', fontSize: '0.8rem' }}
+                      >
+                        <i className="fa-solid fa-code"></i> {showJson ? 'Hide JSON Score' : 'View JSON Score'} (SDK)
+                      </button>
+                    </div>
+
+                    {showJson && (
+                      <div className="json-view" style={{ marginTop: '0.5rem', background: '#0f172a', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #334155', fontSize: '0.8rem', overflowX: 'auto' }}>
+                        <pre style={{ margin: 0, color: '#a5b4fc' }}>{JSON.stringify(latestAnalysis, null, 2)}</pre>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -273,7 +276,7 @@ const App = () => {
                             <div style={{ marginBottom: '0.5rem' }}>{msg.content.rationale}</div>
                             {/* Show concise scores */}
                             <div style={{ fontSize: '0.8rem', opacity: 0.7, marginBottom: '0.5rem' }}>
-                              F: {msg.content.score_fidelity} | S: {msg.content.score_syntax} | A: {msg.content.score_accessibility}
+                              F: {msg.content.score_fidelity} | S: {msg.content.score_syntax} | A: {msg.content.score_accessibility} | R: {msg.content.score_responsiveness || 'N/A'} | V: {msg.content.score_visual || 'N/A'}
                             </div>
                             {/* Apply Fix Button */}
                             {msg.content.fixed_html && (
@@ -296,8 +299,7 @@ const App = () => {
                         )}
                       </div>
                     )
-                  ))}
-                  {loading && <div className="message system-message">Thinking...</div>}
+                  ))}  {loading && <div className="message system-message">Thinking...</div>}
                   <div ref={messagesEndRef} />
                 </div>
 
@@ -316,49 +318,52 @@ const App = () => {
                   </button>
                 </div>
               </div>
-            )}
+            )
+            }
 
             {/* 3. PREVIEW TAB */}
-            {activeTab === 'preview' && (
-              <div className="fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <div className="preview-toolbar" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.9rem', color: '#94a3b8' }}>Rendering safe HTML</span>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    {/* Show Apply button in Preview if we are viewing a 'fixed' version that is different from input? 
+            {
+              activeTab === 'preview' && (
+                <div className="fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <div className="preview-toolbar" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.9rem', color: '#94a3b8' }}>Rendering safe HTML</span>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      {/* Show Apply button in Preview if we are viewing a 'fixed' version that is different from input? 
                          Currently getPreviewCode returns fixed_html if present. 
                          So if what we are seeing is NOT what is in the editor, allow applying it.
                      */}
-                    {getPreviewCode() !== htmlInput && (
+                      {getPreviewCode() !== htmlInput && (
+                        <button
+                          onClick={() => handleApplyFix(getPreviewCode())}
+                          style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', background: '#22c55e', border: 'none', borderRadius: '0.3rem', color: 'white', cursor: 'pointer' }}
+                        >
+                          Apply Fix
+                        </button>
+                      )}
                       <button
-                        onClick={() => handleApplyFix(getPreviewCode())}
-                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', background: '#22c55e', border: 'none', borderRadius: '0.3rem', color: 'white', cursor: 'pointer' }}
+                        onClick={() => navigator.clipboard.writeText(getPreviewCode())}
+                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', background: '#334155', border: 'none', borderRadius: '0.3rem', color: 'white', cursor: 'pointer' }}
                       >
-                        Apply Fix
+                        Copy Code
                       </button>
-                    )}
-                    <button
-                      onClick={() => navigator.clipboard.writeText(getPreviewCode())}
-                      style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem', background: '#334155', border: 'none', borderRadius: '0.3rem', color: 'white', cursor: 'pointer' }}
-                    >
-                      Copy Code
-                    </button>
+                    </div>
+                  </div>
+                  <div className="preview-frame-container" style={{ flex: 1, background: 'white', borderRadius: '0.5rem', overflow: 'hidden' }}>
+                    {/* We use an iframe to isolate styles */}
+                    <iframe
+                      title="preview"
+                      srcDoc={getPreviewCode()}
+                      sandbox="allow-scripts"
+                      style={{ width: '100%', height: '100%', border: 'none' }}
+                    />
                   </div>
                 </div>
-                <div className="preview-frame-container" style={{ flex: 1, background: 'white', borderRadius: '0.5rem', overflow: 'hidden' }}>
-                  {/* We use an iframe to isolate styles */}
-                  <iframe
-                    title="preview"
-                    srcDoc={getPreviewCode()}
-                    sandbox="allow-scripts"
-                    style={{ width: '100%', height: '100%', border: 'none' }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </main>
-    </div>
+              )
+            }
+          </div >
+        </div >
+      </main >
+    </div >
   );
 };
 
