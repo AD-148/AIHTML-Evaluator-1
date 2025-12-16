@@ -140,7 +140,7 @@ const App = () => {
   return (
     <div className="app-container">
       <header>
-        <h1>AI HTML Judge</h1>
+        <h1>AI HTML Judge v2.0 (5-Agent)</h1>
       </header>
 
       <main className="main-grid">
@@ -245,7 +245,7 @@ const App = () => {
                     </div>
 
                     {showJson && (
-                      <div className="json-view" style={{ marginTop: '0.5rem', background: '#0f172a', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #334155', fontSize: '0.8rem', overflowX: 'auto' }}>
+                      <div className="json-view" style={{ marginTop: '0.5rem', background: '#0f172a', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #334155', fontSize: '0.8rem', overflowX: 'auto', maxHeight: '300px', overflowY: 'auto' }}>
                         <pre style={{ margin: 0, color: '#a5b4fc' }}>{JSON.stringify(latestAnalysis, null, 2)}</pre>
                       </div>
                     )}
