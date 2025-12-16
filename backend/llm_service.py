@@ -2,10 +2,12 @@ import os
 import json
 import asyncio
 import logging
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
+
+from backend.static_analysis import StaticAnalyzer
 
 load_dotenv()
 
@@ -13,81 +15,192 @@ logger = logging.getLogger(__name__)
 
 # Data Models
 class EvaluationResult(BaseModel):
-    score_fidelity: int = Field(..., description="0-100 score for how well the HTML represents the desired output")
+    score_fidelity: int = Field(..., description="0-100 score for how well the HTML matches the user's request")
     score_syntax: int = Field(..., description="0-100 score for HTML syntax correctness")
     score_accessibility: int = Field(..., description="0-100 score for accessibility standards (WCAG)")
-    score_responsiveness: int = Field(..., description="0-100 score for mobile responsiveness and adaptability")
-    score_visual: int = Field(..., description="0-100 score for visual aesthetics and design quality")
+    score_responsiveness: int = Field(..., description="0-100 score for mobile SDK adaptability")
+    score_visual: int = Field(..., description="0-100 score for visual aesthetics and premium design quality")
     rationale: str = Field(..., description="Detailed explanation of the scores. Explicitly mention any criteria scoring below 70.")
     final_judgement: str = Field(..., description="Brief summary judgement")
     fixed_html: Optional[str] = Field(None, description="The improved/fixed HTML code if requested by the user")
 
-SYSTEM_PROMPT = """
-You are an expert Frontend QA Engineer and AI Judge.
-Your goal is to evaluate HTML code and ASSIST the user in improving it.
+# Prompts for Specialized Agents
 
-CRITICAL: MAINTAIN CONTEXT OF THE HTML CODE.
-The conversation history contains the initial HTML and subsequent modifications.
-Always analyze the LATEST version of the HTML discussed in the chat history.
+PROMPT_ACCESSIBILITY = """
+You are an expert Accessibility Auditor (WCAG 2.1 AAA).
+Your ONLY goal is to evaluate the ACCESSIBILITY of the provided HTML.
+Reference the Static Analysis Report provided in the context. If the report finds errors (missing alt, missing labels), DEDUCT POINTS SEVERELY.
+Output JSON: {"score_accessibility": int, "rationale_accessibility": "string"}
+Threshold is 70. If issues exist, score MUST be < 70.
+"""
 
-Your tasks:
-1. Evaluate quality on these 5 parameters (0-100):
-   - Fidelity: Accuracy to requirements/intent.
-   - Syntax: Clenliness and validity of code.
-   - Accessibility: WCAG compliance.
-   - Responsiveness: Adaptability to different screen sizes (mobile/desktop).
-   - Visual: Aesthetics, spacing, typography, and modern design principles.
+PROMPT_VISUAL_DESIGN = """
+You are a World-Class Creative Director and UI/UX Designer.
+Your goal is to ensure the designs are PREMIUM, MODERN, and "WOW" the user.
+Evaluate:
+1. **Visual Aesthetics**:
+   - Is it "pretty" or "generic"? (Generic = < 60 score).
+   - Usage of whitespace, typography hierarchies, and color harmony.
+   - Modern touches: shadows, rounded corners, gradients, glassmorphism.
+2. **Fidelity**:
+   - Does it faithfully implement the user's specific requests?
+Output JSON: {
+    "score_visual": int,
+    "score_fidelity": int,
+    "rationale_visual": "string"
+}
+If the design looks like a basic 1990s or 2000s page, score_visual MUST be < 50.
+"""
 
-2. Scoring Logic:
-   - Threshold score is 70.
-   - If any score is BELOW 70, you MUST explicitly mention it in the 'rationale' and explain why it failed the threshold.
+PROMPT_MOBILE_SDK = """
+You are a Mobile Platform Engineer specializing in WebView integrations (iOS/Android).
+Your goal is to ensure this HTML renders perfectly in a Mobile SDK environment.
+Evaluate:
+1. **Viewport**: MUST have `<meta name="viewport" ...>`.
+2. **Fluidity**: Container widths MUST be percentage-based (e.g., 100%) or use `max-width`. ABSOLUTELY NO fixed widths > 320px.
+3. **Touch Targets**: Buttons/inputs must be large enough for fingers (>44px height).
+4. **Scrolling**: NO horizontal scrolling allowed.
+Output JSON: {
+    "score_responsiveness": int,
+    "rationale_responsiveness": "string"
+}
+If fixed widths or small tap targets are found, score_responsiveness MUST be < 60.
+"""
 
-3. Answer user questions about the code.
+PROMPT_SYNTAX = """
+You are a Senior Frontend Architect.
+Evaluate the code quality, syntax validity, and best practices.
+Output JSON: {
+    "score_syntax": int,
+    "rationale_syntax": "string",
+    "fixed_html": "string (FULL fixed HTML code if improvements needed, else null)"
+}
+"""
 
-4. IMPROVE the code:
-   - If the user asks for changes or if scores are low and improvements are obvious, generate the FULL, UPDATED HTML code.
-   - Place this full new HTML in the 'fixed_html' JSON field.
-   - Do NOT provide snippets. Provide the COMPLETE HTML block so it can be rendered as a preview.
+PROMPT_AGGREGATOR = """
+You are the Lead Judge.
+Aggregate the reports from the specialists (Accessibility, Visual/Fidelity, Mobile SDK, Syntax).
+Synthesize their rationales into a final verdict.
+CRITICAL: If specifically the *Mobile SDK* or *Visual* scores are low (<70), valid corrections MUST be suggested in the summary.
 
-Return the output strictly as a JSON object matching this structure:
+Output JSON MUST match this EXACT structure:
 {
     "score_fidelity": int,
     "score_syntax": int,
     "score_accessibility": int,
     "score_responsiveness": int,
     "score_visual": int,
-    "rationale": "string explanation (flag scores < 70 here)",
-    "final_judgement": "string summary",
-    "fixed_html": "string (optional, but REQUIRED if user asks for changes)"
+    "rationale": "string",
+    "final_judgement": "string",
+    "fixed_html": "string or null"
 }
 """
 
 async def analyze_chat(messages: List[dict]) -> EvaluationResult:
     api_key = os.getenv("OPENAI_API_KEY")
     
-    # MOCK MODE Check
-    # Ensure key is present, non-empty, and looks like a valid OpenAI key
-    is_valid_key = api_key and api_key.strip().startswith("sk-") and len(api_key) > 20
-
-    if not is_valid_key:
-        logger.warning(f"Invalid or missing API Key ('{api_key if api_key else "None"}'). Returning mock data.")
-        return EvaluationResult(
-            score_fidelity=85,
-            score_syntax=90,
-            score_accessibility=60,
-            score_responsiveness=75,
-            score_visual=80,
-            rationale="[MOCK] This is a mock response because OPENAI_API_KEY is missing or invalid. I see your previous messages and applied context. Accessibility is below 70 because aria-labels are missing.",
-            final_judgement="Good start (Mock)"
-        )
+    # 1. EXTRACT HTML FROM CONVERSATION
+    last_html = ""
+    for msg in reversed(messages):
+        content = msg.get("content", "")
+        if "<div" in content or "<html" in content or "<!DOCTYPE" in content:
+            last_html = content
+            break
+    
+    # MOCK/VALIDATION Check
+    if not api_key or not api_key.strip().startswith("sk-"):
+        return _get_mock_result()
 
     client = AsyncOpenAI(api_key=api_key)
 
-    # Prepend system prompt to the conversation history
-    full_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
+    # 2. RUN STATIC ANALYSIS
+    static_report = {"static_score": 100, "issues": []}
+    if last_html:
+        try:
+            analyzer = StaticAnalyzer(last_html)
+            static_report = analyzer.analyze()
+        except Exception as e:
+            logger.error(f"Static Analysis Failed: {e}")
+            static_report["issues"].append(f"Static Analysis Error: {str(e)}")
+
+    # 3. RUN MULTI-AGENT EVALUATION (4 Agents)
+    try:
+        results = await asyncio.gather(
+            _run_agent(client, PROMPT_ACCESSIBILITY, messages, f"Static Analysis Report: {json.dumps(static_report)}"),
+            _run_agent(client, PROMPT_VISUAL_DESIGN, messages),
+            _run_agent(client, PROMPT_MOBILE_SDK, messages),
+            _run_agent(client, PROMPT_SYNTAX, messages)
+        )
+        
+        acc_result, vis_result, mob_result, syn_result = results
+        
+        # Normalize keys to prevent "Field required" errors if agents return generic "score"
+        _normalize_keys(acc_result, "score_accessibility")
+        _normalize_keys(vis_result, "score_visual")
+        _normalize_keys(mob_result, "score_responsiveness")
+        _normalize_keys(syn_result, "score_syntax")
+
+        # 4. LEAD JUDGE AGGREGATION
+        # Collect all individual reports
+        agent_reports = {
+            "static_analysis": static_report,
+            "agent_accessibility": acc_result,
+            "agent_visual": vis_result,
+            "agent_mobile_sdk": mob_result,
+            "agent_syntax": syn_result
+        }
+        
+        # Call the Aggregator to synthesize the final verdict
+        final_verdict = await _run_agent(
+            client, 
+            PROMPT_AGGREGATOR, 
+            messages, 
+            f"SPECIALIST REPORTS: {json.dumps(agent_reports)}"
+        )
+        
+        if not final_verdict or "rationale" not in final_verdict:
+            logger.warning("Aggregator failed or returned incomplete data. Falling back to manual merging.")
+            final_scores = {}
+            final_scores.update(acc_result)
+            final_scores.update(vis_result)
+            final_scores.update(mob_result)
+            final_scores.update(syn_result)
+            
+            combined_rationale = (
+                f"**Visual Design**: {final_scores.get('rationale_visual', 'N/A')}\n"
+                f"**Mobile SDK**: {final_scores.get('rationale_responsiveness', 'N/A')}\n"
+                f"**Accessibility**: {final_scores.get('rationale_accessibility', 'N/A')}\n"
+                f"**Syntax**: {final_scores.get('rationale_syntax', 'N/A')}\n"
+                f"[Note: Lead Judge unavailable, using raw reports.]"
+            )
+            final_verdict = final_scores
+            final_verdict["rationale"] = combined_rationale
+            final_verdict["final_judgement"] = "Evaluated by 4 Specialist AI Agents (Lead Judge Unavailable)."
+            final_verdict["fixed_html"] = final_scores.get("fixed_html")
+
+        # Fallback if Aggregator fails to return valid JSON or specific fields
+        # But generally, we trust the Aggregator. 
+        # We enforce the Static Analysis Cap one last time just in case the LLM ignores it, 
+        # though the Accessibility Agent should have handled it.
+        
+        if static_report["issues"] and final_verdict.get("score_accessibility", 100) > static_report["static_score"]:
+             final_verdict["score_accessibility"] = static_report["static_score"]
+             final_verdict["rationale"] = final_verdict.get("rationale", "") + f" [System Enforced: Accessibility score capped due to static errors.]"
+
+        return EvaluationResult(**final_verdict)
+
+    except Exception as e:
+        logger.error(f"Multi-Agent Execution Failed: {e}", exc_info=True)
+        return _get_mock_result(error_msg=str(e))
+
+async def _run_agent(client, system_prompt, messages, context_str="") -> Dict:
+    """Helper to run a single agent."""
+    full_messages = [{"role": "system", "content": system_prompt}]
+    if context_str:
+        full_messages.append({"role": "system", "content": f"CONTEXT: {context_str}"})
+    full_messages.extend(messages)
 
     try:
-        # Wrap the API call with asyncio.wait_for to enforce strict timeout
         response = await asyncio.wait_for(
             client.chat.completions.create(
                 model="gpt-4o",
@@ -96,34 +209,46 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
             ),
             timeout=30.0
         )
-        
-        content = response.choices[0].message.content
-        data = json.loads(content)
-        return EvaluationResult(**data)
-    
-    except asyncio.TimeoutError:
-        logger.error("LLM Call Timed Out (30s)")
-        return EvaluationResult(
-            score_fidelity=85,
-            score_syntax=90,
-            score_accessibility=60,
-            score_responsiveness=75,
-            score_visual=80,
-            rationale="[TIMEOUT] The AI took too long to respond. Returning mock scores. I've also generated a sample fix below for you to test the UI.",
-            final_judgement="Timeout (Mock Fallback)",
-            fixed_html="<!-- Mock Fixed HTML -->\n<div class=\"container\" aria-label=\"Sample Container\">\n  <h1>Fixed Version</h1>\n  <p>This is a sample fixed HTML returned by the fallback mode.</p>\n  <form>\n    <label for=\"email\">Email:</label>\n    <input type=\"email\" id=\"email\" name=\"email\" required>\n    <button type=\"submit\">Submit</button>\n  </form>\n  <img src=\"https://via.placeholder.com/150\" alt=\"Placeholder Image\">\n</div>"
-        )
-
+        return json.loads(response.choices[0].message.content)
     except Exception as e:
-        logger.error(f"Error calling LLM: {e}", exc_info=True)
-        # Fallback to Mock on error
-        return EvaluationResult(
-            score_fidelity=85,
-            score_syntax=90,
-            score_accessibility=60,
-            score_responsiveness=75,
-            score_visual=80,
-            rationale=f"[FALLBACK] Verification failed (Error: {str(e)}). Using mock scores. Accessibility issues detected. Sample fix provided.",
-            final_judgement="Good start (Mock Fallback)",
-            fixed_html="<!-- Mock Fixed HTML -->\n<div class=\"container\" aria-label=\"Sample Container\">\n  <h1>Fixed Version</h1>\n  <p>This is a sample fixed HTML returned by the fallback mode.</p>\n  <form>\n    <label for=\"email\">Email:</label>\n    <input type=\"email\" id=\"email\" name=\"email\" required>\n    <button type=\"submit\">Submit</button>\n  </form>\n  <img src=\"https://via.placeholder.com/150\" alt=\"Placeholder Image\">\n</div>"
-        )
+        logger.error(f"Agent failed: {system_prompt[:20]}... Error: {e}")
+        return {} 
+
+def _get_mock_result(error_msg=""):
+    return EvaluationResult(
+        score_fidelity=85,
+        score_syntax=90,
+        score_accessibility=60,
+        score_responsiveness=75,
+        score_visual=40,
+        rationale=f"[MOCK/ERROR] System returned mock data. {error_msg}. Visual score is low to demonstrate strictness.",
+        final_judgement="Mock Result",
+        fixed_html="<div>Mock Fixed HTML</div>"
+    )
+
+def _normalize_keys(result_dict: Dict, target_score_key: str):
+    """
+    Helper to ensure the dict has the target_score_key.
+    If 'score' exists but target_score_key doesn't, map it.
+    If neither exists, default to 0 to prevent validation error.
+    """
+    if not isinstance(result_dict, dict):
+        logger.warning(f"Agent returned non-dict result: {result_dict}")
+        result_dict = {}
+
+    if target_score_key not in result_dict:
+        if "score" in result_dict:
+            result_dict[target_score_key] = result_dict.pop("score")
+        else:
+            result_dict[target_score_key] = 0
+            
+    # Ensure all required keys for fallback exist if possible
+    # (Mapping rationale if generic 'rationale' key exists but specific one doesn't)
+    target_rationale_key = target_score_key.replace("score_", "rationale_")
+    if target_rationale_key not in result_dict:
+        if "rationale" in result_dict:
+             result_dict[target_rationale_key] = result_dict.get("rationale")
+        elif "analysis" in result_dict:
+             result_dict[target_rationale_key] = result_dict.get("analysis")
+        else:
+             result_dict[target_rationale_key] = "No rationale provided."

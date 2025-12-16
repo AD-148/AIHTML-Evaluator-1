@@ -13,7 +13,7 @@ def test_endpoint():
     
     print(f"Testing API at {url}...")
     try:
-        response = requests.post(url, json=payload, timeout=10)
+        response = requests.post(url, json=payload, timeout=60)
         print(f"Status Code: {response.status_code}")
         print("Response Headers:", response.headers)
         
