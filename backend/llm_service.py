@@ -255,7 +255,9 @@ async def _run_agent(client, system_prompt, messages, context_str="") -> Dict:
             client.chat.completions.create(
                 model="gpt-4o",
                 messages=full_messages,
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
+                temperature=0.0,
+                seed=42
             ),
             timeout=30.0
         )
