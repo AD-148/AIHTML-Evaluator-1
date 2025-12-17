@@ -253,7 +253,11 @@ async def _run_agent(client, system_prompt, messages, context_str="") -> Dict:
         return json.loads(response.choices[0].message.content)
     except Exception as e:
         logger.error(f"Agent failed: {system_prompt[:20]}... Error: {e}")
-        return {} 
+        # Return error as rationale so it appears in UI
+        return {
+            "rationale": f"Agent Error: {str(e)}",
+            "score": 0
+        } 
 
 def _get_mock_result(error_msg=""):
     return EvaluationResult(
