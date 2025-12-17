@@ -6,9 +6,12 @@ import os
 from dotenv import load_dotenv
 
 try:
-    from .llm_service import analyze_chat, EvaluationResult
+    from backend.llm_service import analyze_chat, EvaluationResult
 except ImportError:
-    from llm_service import analyze_chat, EvaluationResult
+    try:
+        from .llm_service import analyze_chat, EvaluationResult
+    except ImportError:
+         from llm_service import analyze_chat, EvaluationResult
 
 load_dotenv()
 
