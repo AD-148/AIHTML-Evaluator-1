@@ -197,8 +197,12 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
             f"SPECIALIST REPORTS: {json.dumps(agent_reports)}"
         )
         
-        if not final_verdict or "rationale" not in final_verdict:
-            logger.warning("Aggregator failed or returned incomplete data. Falling back to manual merging.")
+        # Validate Aggregator Output has all required fields
+        required_fields = ["score_fidelity", "score_syntax", "score_accessibility", "score_responsiveness", "score_visual", "rationale", "final_judgement"]
+        missing_fields = [f for f in required_fields if f not in final_verdict]
+
+        if missing_fields:
+            logger.warning(f"Aggregator output missing fields {missing_fields}. Falling back to manual merging.")
             final_scores = {}
             final_scores.update(acc_result)
             final_scores.update(vis_result)
@@ -206,6 +210,11 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
             final_scores.update(syn_result)
             final_scores.update(fid_result)
             
+            # Ensure zeroes for any totally missing keys in individual results
+            for k in ["score_fidelity", "score_syntax", "score_accessibility", "score_responsiveness", "score_visual"]:
+                if k not in final_scores:
+                    final_scores[k] = 0
+
             combined_rationale = (
                 f"**Fidelity**: {final_scores.get('rationale_fidelity', 'N/A')}\n"
                 f"**Visual Design**: {final_scores.get('rationale_visual', 'N/A')}\n"
