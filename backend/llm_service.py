@@ -26,6 +26,23 @@ class EvaluationResult(BaseModel):
 
 # Prompts for Specialized Agents
 
+PROMPT_FIDELITY = """
+You are a QC Specialist and Requirements Auditor.
+Your goal is to verify if the HTML satisfies the user's request with 100% precision.
+
+Evaluate two dimensions:
+1. **Feature Policing** (Crucial): 
+   - Check if ALL requested interactive elements (buttons, inputs, toggles, etc.) are present. 
+   - If a specific interactive element is missing, score MUST be < 70 (Major Miss).
+2. **Visual Accuracy**:
+   - Does the implementation visually match the *description* given by the user? (e.g. "Red button" vs "Blue button").
+
+Output JSON: {
+    "score_fidelity": int,
+    "rationale_fidelity": "string"
+}
+"""
+
 PROMPT_ACCESSIBILITY = """
 You are an expert Accessibility Auditor (WCAG 2.1 AAA).
 Your ONLY goal is to evaluate the ACCESSIBILITY of the provided HTML.
@@ -37,16 +54,18 @@ Threshold is 70. If issues exist, score MUST be < 70.
 PROMPT_VISUAL_DESIGN = """
 You are a World-Class Creative Director and UI/UX Designer.
 Your goal is to ensure the designs are PREMIUM, MODERN, and "WOW" the user.
-Evaluate:
-1. **Visual Aesthetics**:
-   - Is it "pretty" or "generic"? (Generic = < 60 score).
-   - Usage of whitespace, typography hierarchies, and color harmony.
-   - Modern touches: shadows, rounded corners, gradients, glassmorphism.
-2. **Fidelity**:
-   - Does it faithfully implement the user's specific requests?
+
+Evaluate PURE AESTHETICS (Ignore functional requirements, focus on looks):
+1. **Alignment & Spacing**:
+   - Are elements perfectly aligned? Is whitespace consistent?
+   - Deduct points for sloppy margins or misalignment.
+2. **Visual Appeal**:
+   - Is it "pretty" or "generic"? (Generic white/grey box = Max 60 score).
+   - Usage of shadows, rounded corners, gradients, glassmorphism.
+   - Typography hierarchies (Good contrast, readable fonts).
+
 Output JSON: {
     "score_visual": int,
-    "score_fidelity": int,
     "rationale_visual": "string"
 }
 If the design looks like a basic 1990s or 2000s page, score_visual MUST be < 50.
@@ -55,21 +74,35 @@ If the design looks like a basic 1990s or 2000s page, score_visual MUST be < 50.
 PROMPT_MOBILE_SDK = """
 You are a Mobile Platform Engineer specializing in WebView integrations (iOS/Android).
 Your goal is to ensure this HTML renders perfectly in a Mobile SDK environment.
+
 Evaluate:
-1. **Viewport**: MUST have `<meta name="viewport" ...>`.
-2. **Fluidity**: Container widths MUST be percentage-based (e.g., 100%) or use `max-width`. ABSOLUTELY NO fixed widths > 320px.
-3. **Touch Targets**: Buttons/inputs must be large enough for fingers (>44px height).
-4. **Scrolling**: NO horizontal scrolling allowed.
+1. **OS Compatibility**: 
+   - Check for `safe-area-inset` support for notched phones.
+   - Check for `-webkit-` prefixes where needed.
+2. **Viewport & Fluidity**: 
+   - MUST have `<meta name="viewport" ...>`.
+   - CONTAINER WIDTHS which are fixed pixel values > 320px are FAILS. (Score < 60).
+3. **Touch Targets**: 
+   - Buttons/inputs must be large enough for fingers (>44px height).
+4. **Scrolling**: 
+   - NO horizontal scrolling allowed.
+
 Output JSON: {
     "score_responsiveness": int,
     "rationale_responsiveness": "string"
 }
-If fixed widths or small tap targets are found, score_responsiveness MUST be < 60.
 """
 
 PROMPT_SYNTAX = """
 You are a Senior Frontend Architect.
-Evaluate the code quality, syntax validity, and best practices.
+Evaluate the code quality, syntax validity, and JavaScript interactivity.
+
+Evaluate:
+1. **Clean Code**: Proper nesting, valid tags.
+2. **Interactivity**: 
+   - If User requested logic (e.g. "Calculate"), check if JS exists and works.
+   - No dead script tags.
+
 Output JSON: {
     "score_syntax": int,
     "rationale_syntax": "string",
@@ -79,9 +112,12 @@ Output JSON: {
 
 PROMPT_AGGREGATOR = """
 You are the Lead Judge.
-Aggregate the reports from the specialists (Accessibility, Visual/Fidelity, Mobile SDK, Syntax).
-Synthesize their rationales into a final verdict.
-CRITICAL: If specifically the *Mobile SDK* or *Visual* scores are low (<70), valid corrections MUST be suggested in the summary.
+Aggregate the reports from the 5 specialists (Fidelity, Accessibility, Visual, Mobile SDK, Syntax).
+
+Your Goals:
+1. **Synthesize**: Combine the 5 rationales into a single coherent verdict.
+2. **Standards**: Keep strict WHATWG and W3C standards in mind.
+3. **Conflict Resolution**: If Visual says "Great" but Fidelity says "Missing Feature", side with Fidelity for the final verdict summary but keep the scores separate.
 
 Output JSON MUST match this EXACT structure:
 {
@@ -123,22 +159,24 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
             logger.error(f"Static Analysis Failed: {e}")
             static_report["issues"].append(f"Static Analysis Error: {str(e)}")
 
-    # 3. RUN MULTI-AGENT EVALUATION (4 Agents)
+    # 3. RUN MULTI-AGENT EVALUATION (5 Agents)
     try:
         results = await asyncio.gather(
             _run_agent(client, PROMPT_ACCESSIBILITY, messages, f"Static Analysis Report: {json.dumps(static_report)}"),
             _run_agent(client, PROMPT_VISUAL_DESIGN, messages),
             _run_agent(client, PROMPT_MOBILE_SDK, messages),
-            _run_agent(client, PROMPT_SYNTAX, messages)
+            _run_agent(client, PROMPT_SYNTAX, messages),
+            _run_agent(client, PROMPT_FIDELITY, messages)
         )
         
-        acc_result, vis_result, mob_result, syn_result = results
+        acc_result, vis_result, mob_result, syn_result, fid_result = results
         
         # Normalize keys to prevent "Field required" errors if agents return generic "score"
         _normalize_keys(acc_result, "score_accessibility")
         _normalize_keys(vis_result, "score_visual")
         _normalize_keys(mob_result, "score_responsiveness")
         _normalize_keys(syn_result, "score_syntax")
+        _normalize_keys(fid_result, "score_fidelity")
 
         # 4. LEAD JUDGE AGGREGATION
         # Collect all individual reports
@@ -147,7 +185,8 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
             "agent_accessibility": acc_result,
             "agent_visual": vis_result,
             "agent_mobile_sdk": mob_result,
-            "agent_syntax": syn_result
+            "agent_syntax": syn_result,
+            "agent_fidelity": fid_result
         }
         
         # Call the Aggregator to synthesize the final verdict
@@ -165,8 +204,10 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
             final_scores.update(vis_result)
             final_scores.update(mob_result)
             final_scores.update(syn_result)
+            final_scores.update(fid_result)
             
             combined_rationale = (
+                f"**Fidelity**: {final_scores.get('rationale_fidelity', 'N/A')}\n"
                 f"**Visual Design**: {final_scores.get('rationale_visual', 'N/A')}\n"
                 f"**Mobile SDK**: {final_scores.get('rationale_responsiveness', 'N/A')}\n"
                 f"**Accessibility**: {final_scores.get('rationale_accessibility', 'N/A')}\n"
@@ -175,7 +216,7 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
             )
             final_verdict = final_scores
             final_verdict["rationale"] = combined_rationale
-            final_verdict["final_judgement"] = "Evaluated by 4 Specialist AI Agents (Lead Judge Unavailable)."
+            final_verdict["final_judgement"] = "Evaluated by 5 Specialist AI Agents (Lead Judge Unavailable)."
             final_verdict["fixed_html"] = final_scores.get("fixed_html")
 
         # Fallback if Aggregator fails to return valid JSON or specific fields
