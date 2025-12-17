@@ -163,7 +163,35 @@ const App = () => {
         </div>
 
         {/* RIGHT PANEL: HYBRID TABS */}
-        <div className="card results-card" style={{ display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
+        <div className="card results-card" style={{ display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden', position: 'relative' }}>
+
+          {/* JSON OVERLAY (Absolute Positioned over the card) */}
+          {showJson && latestAnalysis && (
+            <div className="json-overlay fade-in" style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(15, 23, 42, 0.98)',
+              zIndex: 50,
+              padding: '1.5rem',
+              display: 'flex',
+              flexDirection: 'column'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#e2e8f0' }}>Raw JSON Analysis</h3>
+                <button
+                  onClick={() => setShowJson(false)}
+                  style={{ background: '#334155', color: 'white', border: 'none', padding: '0.4rem 1rem', borderRadius: '0.3rem', cursor: 'pointer' }}
+                >
+                  <i className="fa-solid fa-times"></i> Close
+                </button>
+              </div>
+              <div style={{ flex: 1, overflow: 'auto', background: '#020617', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #1e293b' }}>
+                <pre style={{ margin: 0, color: '#a5b4fc', fontSize: '0.85rem', fontFamily: 'monospace' }}>
+                  {JSON.stringify(latestAnalysis, null, 2)}
+                </pre>
+              </div>
+            </div>
+          )}
 
           {/* TABS HEADER */}
           <div className="tabs-header">
@@ -237,18 +265,12 @@ const App = () => {
                     {/* JSON VIEW TOGGLE */}
                     <div style={{ marginTop: '1rem' }}>
                       <button
-                        onClick={() => setShowJson(!showJson)}
+                        onClick={() => setShowJson(true)}
                         style={{ background: 'transparent', border: '1px solid #334155', color: '#94a3b8', padding: '0.4rem 0.8rem', borderRadius: '0.3rem', cursor: 'pointer', fontSize: '0.8rem' }}
                       >
-                        <i className="fa-solid fa-code"></i> {showJson ? 'Hide JSON Score' : 'View JSON Score'} (SDK)
+                        <i className="fa-solid fa-code"></i> View Raw JSON Score
                       </button>
                     </div>
-
-                    {showJson && (
-                      <div className="json-view" style={{ marginTop: '0.5rem', background: '#0f172a', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #334155', fontSize: '0.8rem', overflowX: 'auto', maxHeight: '300px', overflowY: 'auto' }}>
-                        <pre style={{ margin: 0, color: '#a5b4fc' }}>{JSON.stringify(latestAnalysis, null, 2)}</pre>
-                      </div>
-                    )}
                   </>
                 )}
               </div>
