@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import './index.css';
 
 const App = () => {
@@ -257,7 +258,9 @@ const App = () => {
                       </div>
                     </div>
                     <div className="section-title" style={{ fontSize: '1rem' }}>Rationale</div>
-                    <div className="rationale-box">{latestAnalysis.rationale}</div>
+                    <div className="rationale-box" style={{ whiteSpace: 'normal', lineHeight: '1.6' }}>
+                      <ReactMarkdown>{latestAnalysis.rationale}</ReactMarkdown>
+                    </div>
                     <div className="judgement-box">
                       <span style={{ opacity: 0.7 }}>Verdict: </span>{latestAnalysis.final_judgement}
                     </div>

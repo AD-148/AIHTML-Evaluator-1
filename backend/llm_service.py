@@ -115,9 +115,9 @@ You are the Lead Judge.
 Aggregate the reports from the 5 specialists (Fidelity, Accessibility, Visual, Mobile SDK, Syntax).
 
 Your Goals:
-1. **Synthesize**: Combine the 5 rationales into a single coherent verdict.
+1. **Synthesize**: Combine the 5 rationales into a structured verdict.
 2. **Standards**: Keep strict WHATWG and W3C standards in mind.
-3. **Conflict Resolution**: If Visual says "Great" but Fidelity says "Missing Feature", side with Fidelity for the final verdict summary but keep the scores separate.
+3. **Conflict Resolution**: If Visual says "Great" but Fidelity says "Missing Feature", side with Fidelity.
 
 Output JSON MUST match this EXACT structure:
 {
@@ -126,10 +126,21 @@ Output JSON MUST match this EXACT structure:
     "score_accessibility": int,
     "score_responsiveness": int,
     "score_visual": int,
-    "rationale": "string",
+    "rationale": "string -> MUST BE MARKDOWN FORMATTED. Use bullet points for each agent's finding, followed by a '### Verdict' section.",
     "final_judgement": "string",
     "fixed_html": "string or null"
 }
+
+Format for 'rationale':
+### Agent Reports
+* **Fidelity**: [Why score?] ...
+* **Visual**: [Why score?] ...
+* **Mobile**: [Why score?] ...
+* **Accessibility**: [Why score?] ...
+* **Syntax**: [Why score?] ...
+
+### Verdict
+[Final concise summary of the decision, mentioning the biggest blocker if any]
 """
 
 async def analyze_chat(messages: List[dict]) -> EvaluationResult:
