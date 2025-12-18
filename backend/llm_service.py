@@ -374,7 +374,7 @@ async def _run_agent(client, system_prompt, messages, context_str="") -> Dict:
                 temperature=0.0,
                 seed=42
             ),
-            timeout=30.0
+            timeout=120.0
         )
         content = response.choices[0].message.content
         # CLEANUP: Remove ```json and ``` if present
