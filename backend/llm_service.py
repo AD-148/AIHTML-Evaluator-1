@@ -240,6 +240,7 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
     if last_html:
         try:
             # Run unified single-pass analysis
+            analyzer = AdvancedAnalyzer(last_html)
             results = analyzer.analyze()
             context_access = results["access"]
             context_mobile = results["mobile"]
@@ -252,7 +253,7 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
             context_mobile = "Mobile Simulation skipped due to error."
             context_fidelity = "Fidelity Check skipped due to error."
             context_visual = "Visual Check skipped due to error."
-            execution_trace = ["error: Advanced Analysis Failed completely."]
+            execution_trace = [f"error: Advanced Analysis Canceled. Exception: {str(e)}"]
 
     # 3. RUN MULTI-AGENT EVALUATION (5 Agents)
     try:
