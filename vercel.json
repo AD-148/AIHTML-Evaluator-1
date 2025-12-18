@@ -1,8 +1,11 @@
 {
     "devCommand": "npm run dev",
     "buildCommand": "npm run build",
-    "installCommand": "pip install -r requirements.txt && python -m playwright install chromium",
+    "installCommand": "export PLAYWRIGHT_BROWSERS_PATH=0 && pip install -r requirements.txt && python -m playwright install chromium",
     "outputDirectory": "frontend/dist",
+    "env": {
+        "PLAYWRIGHT_BROWSERS_PATH": "0"
+    },
     "rewrites": [
         {
             "source": "/evaluate",

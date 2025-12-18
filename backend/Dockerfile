@@ -8,7 +8,11 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Install any needed packages specified in requirements.txt
+# Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Playwright Browsers and System Dependencies
+RUN python -m playwright install --with-deps chromium
 
 # Copy the current directory contents into the container at /app
 COPY . .
