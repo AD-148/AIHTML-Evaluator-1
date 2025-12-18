@@ -95,7 +95,7 @@ class AdvancedAnalyzer:
                     # Capture Console Logs
                     console_logs = []
                     page.on("console", lambda msg: console_logs.append(f"CONSOLE [{msg.type}]: {msg.text}"))
-                    page.on("pageerror", lambda exc: console_logs.append(f"CONSOLE [CRITICAL_ERROR]: {exc}"))
+                    page.on("pageerror", lambda exc: self._log_trace("boom", f"[CRITICAL] JS Error: {exc}"))
 
                     await page.set_content(self.html_content)
 
@@ -194,7 +194,7 @@ class AdvancedAnalyzer:
                                         self._log_trace("point_up_2", f"Tapped <{tag}> element")
                                 except Exception as e:
                                     self.logs["mobile_logs"].append(f"Target #{i+1}: FAILED INTERACTION. Error: {e}")
-                                    self._log_trace("warning", f"Failed to interact with Target #{i+1}: {e}")
+                                    self._log_trace("x", f"[FAIL] Target #{i+1}: Interaction failed. Error: {e}")
                         
                         # 2. Landscape check
                         await page.set_viewport_size({"width": 844, "height": 390})
@@ -202,8 +202,10 @@ class AdvancedAnalyzer:
                         scroll_width = await page.evaluate("document.body.scrollWidth")
                         if scroll_width > 844:
                             self.logs["mobile_logs"].append(f"LANDSCAPE FAIL: Horizontal scroll detected.")
+                            self._log_trace("x", "[FAIL] Landscape Mode: Horizontal scroll detected.")
                         else:
                             self.logs["mobile_logs"].append("LANDSCAPE PASS: No horizontal scroll.")
+                            self._log_trace("white_check_mark", "[PASS] Landscape Mode: No horizontal scroll.")
                             
                     except Exception as e:
                         logger.error(f"Phase D (Mobile iOS) Failed: {e}")
@@ -234,8 +236,10 @@ class AdvancedAnalyzer:
                             try:
                                 await btn.tap(timeout=500)
                                 self.logs["mobile_logs"].append(f"Android Target Check: Tappable.")
+                                self._log_trace("white_check_mark", "[PASS] Android Check: Button is tappable.")
                             except:
                                  self.logs["mobile_logs"].append(f"Android Target Check: FAILED TAP (Layout Shift?).")
+                                 self._log_trace("x", "[FAIL] Android Check: Button tap failed (Layout Shift?).")
 
                     except Exception as e:
                         logger.error(f"Phase D2 (Android) Failed: {e}")

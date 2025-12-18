@@ -419,14 +419,32 @@ const App = () => {
                         }
                       }
 
+                      let borderColor = '#6366f1'; // Default Indigo
+                      let textColor = '#cbd5e1'; // Default Grey
+
+                      if (displayLog.includes("[PASS]")) {
+                        borderColor = '#22c55e'; // Green
+                        textColor = '#86efac';
+                        displayLog = displayLog.replace("[PASS]", "").trim();
+                      } else if (displayLog.includes("[FAIL]")) {
+                        borderColor = '#ef4444'; // Red
+                        textColor = '#fca5a5';
+                        displayLog = displayLog.replace("[FAIL]", "").trim();
+                      } else if (displayLog.includes("[CRITICAL]")) {
+                        borderColor = '#ef4444'; // Red
+                        textColor = '#fca5a5';
+                        displayLog = displayLog.replace("[CRITICAL]", "").trim();
+                        icon = "🚨";
+                      }
+
                       return (
                         <div key={idx} style={{
                           display: 'flex', gap: '0.8rem', padding: '0.6rem',
-                          background: '#0f172a', borderRadius: '0.4rem', borderLeft: '3px solid #6366f1',
+                          background: '#0f172a', borderRadius: '0.4rem', borderLeft: `3px solid ${borderColor}`,
                           alignItems: 'center'
                         }}>
                           <span style={{ fontSize: '1.2rem' }}>{icon}</span>
-                          <span style={{ color: '#cbd5e1' }}>{displayLog}</span>
+                          <span style={{ color: textColor }}>{displayLog}</span>
                         </div>
                       );
                     })}
