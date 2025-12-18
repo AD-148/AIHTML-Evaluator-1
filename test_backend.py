@@ -12,7 +12,7 @@ headers = {"Content-Type": "application/json"}
 
 print(f"Sending POST request to {url}...")
 try:
-    response = requests.post(url, json=payload, headers=headers, timeout=10)
+    response = requests.post(url, json=payload, headers=headers, timeout=45)
     print(f"Status Code: {response.status_code}")
     print("Response Body:")
     try:

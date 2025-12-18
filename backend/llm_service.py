@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 
-from backend.static_analysis import StaticAnalyzer
+from backend.advanced_analysis import AdvancedAnalyzer
 
 load_dotenv()
 
@@ -30,6 +30,18 @@ PROMPT_FIDELITY = """
 You are a QC Specialist and Requirements Auditor.
 Your goal is to verify if the HTML satisfies the user's request with 100% precision.
 
+INPUT:
+- User HTML Code
+- SYSTEM REPORT (UI Inventory): Count of elements and computed styles (e.g. Real Button Color).
+
+INSTRUCTIONS:
+1. **Compare Inventory**: 
+   - If User asked for "Blue Button" and Report says "Primary Button Computed Style: rgb(255, 0, 0)" (Red), DEDUCT points.
+   - If User asked for "3 Inputs" and Report says "Found 1 Input", DEDUCT points.
+2. **Evaluate Dimensions**:
+   - **Feature Policing** (Crucial): Check presence of all elements.
+   - **Visual Accuracy**: Check styles.
+
 Evaluate two dimensions:
 1. **Feature Policing** (Crucial): 
    - Check if ALL requested interactive elements (buttons, inputs, toggles, etc.) are present. 
@@ -37,7 +49,19 @@ Evaluate two dimensions:
 2. **Visual Accuracy**:
    - Does the implementation visually match the *description* given by the user? (e.g. "Red button" vs "Blue button").
 
+### SCORING RUBRIC (FEW-SHOT EXAMPLES):
+- **Scenario A**: User asked for "Login Form with Google Button". HTML has form but missing Google button.
+  - Score: 60
+  - Rationale: "Major feature missing (Google Button)."
+- **Scenario B**: User asked for "Blue Card". HTML is a Card but background is white (default).
+  - Score: 75
+  - Rationale: "Functional elements present, but major visual mismatch (Wrong color)."
+- **Scenario C**: User asked for "Hero Section". HTML matches description perfectly.
+  - Score: 100
+  - Rationale: "Perfect match."
+
 Output JSON: {
+    "step_by_step_reasoning": "First, I checked... Then I saw...",
     "score_fidelity": int,
     "rationale_fidelity": "string"
 }
@@ -45,15 +69,38 @@ Output JSON: {
 
 PROMPT_ACCESSIBILITY = """
 You are an expert Accessibility Auditor (WCAG 2.1 AAA).
-Your ONLY goal is to evaluate the ACCESSIBILITY of the provided HTML.
-Reference the Static Analysis Report provided in the context. If the report finds errors (missing alt, missing labels), DEDUCT POINTS SEVERELY.
+Your goal is to evaluate the ACCESSIBILITY of the provided HTML based on the provided SYSTEM REPORT.
+
+INPUT:
+- User HTML Code
+- SYSTEM REPORT (Truth Source): Contains strict logs of missing alts, contrast issues, etc.
+
+INSTRUCTIONS:
+1. **Trust the System Report**: If the report says "Image missing alt", it IS missing. Do not debate it.
+2. **Score Cap**: The report may define a "Score Cap" (e.g. Max 60). You CANNOT score higher than this cap.
+3. **Deductions**:
+   - Critical Violations (e.g. missing alt, no labels): -20 points each.
+   - Serious Violations (e.g. contrast): -10 points each.
+4. **Rationale**:
+   - First, list the Critical/Serious violations found by the System.
+   - Then, add any manual observations.
+
 Output JSON: {"score_accessibility": int, "rationale_accessibility": "string"}
-Threshold is 70. If issues exist, score MUST be < 70.
 """
 
 PROMPT_VISUAL_DESIGN = """
 You are a World-Class Creative Director and UI/UX Designer.
 Your goal is to ensure the designs are PREMIUM, MODERN, and "WOW" the user.
+
+INPUT:
+- User HTML Code
+- SYSTEM REPORT (Style DNA): Detected Fonts and CSS Features.
+
+INSTRUCTIONS:
+1. **Analyze Signals**:
+   - If Report says "Generic/Outdated Font (Times New Roman)", score MUST match "1995 Web" level (< 60).
+   - If Report says "Detected Shadows, Gradients", score is boosted (70-90 range depending on harmony).
+   - If Report says "flat/basic design", score can max out at 70 (Bootstrap level).
 
 Evaluate PURE AESTHETICS (Ignore functional requirements, focus on looks):
 1. **Alignment & Spacing**:
@@ -64,7 +111,14 @@ Evaluate PURE AESTHETICS (Ignore functional requirements, focus on looks):
    - Usage of shadows, rounded corners, gradients, glassmorphism.
    - Typography hierarchies (Good contrast, readable fonts).
 
+### SCORING RUBRIC (FEW-SHOT EXAMPLES):
+- **Score 95-100**: Modern, ample whitespace, subtle shadows, custom font (Inter/Roboto), consistent color palette. Looks like a Dribbble shot.
+- **Score 70-80**: Standard Bootstrap-like look. Clean but boring. Default blue links or buttons.
+- **Score 40-60**: "1995 Web". Times New Roman, zero CSS padding, default browser borders. 
+- **Score <40**: Broken layout, overlapping text.
+
 Output JSON: {
+    "step_by_step_reasoning": "Analyzed alignment... Checked typography...",
     "score_visual": int,
     "rationale_visual": "string"
 }
@@ -75,19 +129,24 @@ PROMPT_MOBILE_SDK = """
 You are a Mobile Platform Engineer specializing in WebView integrations (iOS/Android).
 Your goal is to ensure this HTML renders perfectly in a Mobile SDK environment.
 
-Evaluate:
-1. **OS Compatibility**: 
-   - Check for `safe-area-inset` support for notched phones.
-   - Check for `-webkit-` prefixes where needed.
-2. **Viewport & Fluidity**: 
-   - MUST have `<meta name="viewport" ...>`.
-   - CONTAINER WIDTHS which are fixed pixel values > 320px are FAILS. (Score < 60).
-3. **Touch Targets**: 
-   - Buttons/inputs must be large enough for fingers (>44px height).
-4. **Scrolling**: 
-   - NO horizontal scrolling allowed.
+INPUT:
+- User HTML Code
+- SYSTEM REPORT (Truth Source): Logs from a real Mobile Viewport Simulation (iPhone 12).
+
+INSTRUCTIONS:
+1. **Trust the Simulation**: 
+   - If the log says "Target #1 FAILED TAP", it is a critical failure (-20 pts).
+   - If the log says "Runtime Errors Detected", deduct -15 pts.
+   - If "LANDSCAPE FAIL" is present, deduct -10 pts.
+2. **Evaluate**:
+   - **OS Compatibility**: `safe-area-inset`, `-webkit-` prefixes.
+   - **Viewport**: Must have correct `<meta name="viewport">`.
+   - **Orientation**: Check if design works in both Portrait and Landscape (via logs).
+   - **Touch Targets**: Check simulation logs for tappability.
+   - **Scrolling**: No horizontal scrolling.
 
 Output JSON: {
+    "step_by_step_reasoning": "Checked viewport... Analyzed simulation logs...",
     "score_responsiveness": int,
     "rationale_responsiveness": "string"
 }
@@ -97,13 +156,22 @@ PROMPT_SYNTAX = """
 You are a Senior Frontend Architect.
 Evaluate the code quality, syntax validity, and JavaScript interactivity.
 
-Evaluate:
-1. **Clean Code**: Proper nesting, valid tags.
-2. **Interactivity**: 
-   - If User requested logic (e.g. "Calculate"), check if JS exists and works.
-   - No dead script tags.
+INPUT:
+- User HTML Code
+- SYSTEM REPORT (Syntax Logs): HTML5 Validator & BS4 Structural Checks.
+
+INSTRUCTIONS:
+1. **Trust Syntax Logs**:
+   - If Report says "Missing <!DOCTYPE>", deduct 10 pts.
+   - If Report says "Tags not closed" or "Nesting error", deduct strict points.
+2. **Evaluate**:
+   - **Clean Code**: Proper nesting, valid tags.
+   - **Interactivity**: 
+     - If User requested logic (e.g. "Calculate"), check if JS exists and works.
+     - No dead script tags.
 
 Output JSON: {
+    "step_by_step_reasoning": "Checked tag validity... Verified JS...",
     "score_syntax": int,
     "rationale_syntax": "string",
     "fixed_html": "string (FULL fixed HTML code if improvements needed, else null)"
@@ -114,9 +182,16 @@ PROMPT_AGGREGATOR = """
 You are the Lead Judge.
 Aggregate the reports from the 5 specialists (Fidelity, Accessibility, Visual, Mobile SDK, Syntax).
 
+INPUT:
+- User HTML Code
+- SPECIALIST REPORTS (JSON): Contains both "Analysis Logs" (Tools) and "Agent Scores".
+
 Your Goals:
 1. **Synthesize**: Combine the 5 rationales into a structured verdict.
-2. **Standards**: Keep strict WHATWG and W3C standards in mind.
+2. **PRIORITIZE TOOL EVIDENCE**: 
+   - If 'static_analysis' logs a Critical Error, BUT 'agent_accessibility' ignored it, you MUST side with the TOOL and lower the score.
+   - If 'mobile_analysis' says "Failed Tap", but 'agent_mobile_sdk' gave 100, you MUST lower the score.
+   - **Ground Truth Hierarchy**: Tool Logs > Agent Opinion.
 3. **Conflict Resolution**: If Visual says "Great" but Fidelity says "Missing Feature", side with Fidelity.
 
 Output JSON MUST match this EXACT structure:
@@ -160,24 +235,35 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
 
     client = AsyncOpenAI(api_key=api_key)
 
-    # 2. RUN STATIC ANALYSIS
-    static_report = {"static_score": 100, "issues": []}
+    # 2. RUN ADVANCED ANALYSIS
+    context_access = ""
+    context_mobile = ""
+    context_fidelity = ""
+    context_visual = ""
+    
     if last_html:
         try:
-            analyzer = StaticAnalyzer(last_html)
-            static_report = analyzer.analyze()
+            # Run unified single-pass analysis
+            results = analyzer.analyze()
+            context_access = results["access"]
+            context_mobile = results["mobile"]
+            context_fidelity = results["fidelity"]
+            context_visual = results["visual"]
         except Exception as e:
-            logger.error(f"Static Analysis Failed: {e}")
-            static_report["issues"].append(f"Static Analysis Error: {str(e)}")
+            logger.error(f"Advanced Analysis Pipeline Failed completely. Falling back to empty contexts. Error: {e}", exc_info=True)
+            context_access = f"System Error: {str(e)}"
+            context_mobile = "Mobile Simulation skipped due to error."
+            context_fidelity = "Fidelity Check skipped due to error."
+            context_visual = "Visual Check skipped due to error."
 
     # 3. RUN MULTI-AGENT EVALUATION (5 Agents)
     try:
         results = await asyncio.gather(
-            _run_agent(client, PROMPT_ACCESSIBILITY, messages, f"Static Analysis Report: {json.dumps(static_report)}"),
-            _run_agent(client, PROMPT_VISUAL_DESIGN, messages),
-            _run_agent(client, PROMPT_MOBILE_SDK, messages),
-            _run_agent(client, PROMPT_SYNTAX, messages),
-            _run_agent(client, PROMPT_FIDELITY, messages)
+            _run_agent(client, PROMPT_ACCESSIBILITY, messages, context_access),
+            _run_agent(client, PROMPT_VISUAL_DESIGN, messages, context_visual),
+            _run_agent(client, PROMPT_MOBILE_SDK, messages, context_mobile),
+            _run_agent(client, PROMPT_SYNTAX, messages, context_access),
+            _run_agent(client, PROMPT_FIDELITY, messages, context_fidelity)
         )
         
         acc_result, vis_result, mob_result, syn_result, fid_result = results
@@ -192,7 +278,10 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
         # 4. LEAD JUDGE AGGREGATION
         # Collect all individual reports
         agent_reports = {
-            "static_analysis": static_report,
+            "static_analysis": context_access,
+            "mobile_analysis": context_mobile,
+            "fidelity_inventory": context_fidelity,
+            "visual_dna": context_visual,
             "agent_accessibility": acc_result,
             "agent_visual": vis_result,
             "agent_mobile_sdk": mob_result,
@@ -244,14 +333,13 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
         # We enforce the Static Analysis Cap one last time just in case the LLM ignores it, 
         # though the Accessibility Agent should have handled it.
         
-        if static_report["issues"] and final_verdict.get("score_accessibility", 100) > static_report["static_score"]:
-             final_verdict["score_accessibility"] = static_report["static_score"]
-             final_verdict["rationale"] = final_verdict.get("rationale", "") + f" [System Enforced: Accessibility score capped due to static errors.]"
+        # No longer need manual capping here as the Agent Prompt instructions (+ Context) handle it better.
+        # But we can keep a safeguard if needed. For now, trusting the "Tool-Augmented" prompt.
 
         return EvaluationResult(**final_verdict)
 
     except Exception as e:
-        logger.error(f"Multi-Agent Execution Failed: {e}", exc_info=True)
+        logger.error(f"CRITICAL: Multi-Agent Execution Aggregation Failed. Returning Mock Data. Error: {e}", exc_info=True)
         return _get_mock_result(error_msg=str(e))
 
 async def _run_agent(client, system_prompt, messages, context_str="") -> Dict:
@@ -274,7 +362,7 @@ async def _run_agent(client, system_prompt, messages, context_str="") -> Dict:
         )
         return json.loads(response.choices[0].message.content)
     except Exception as e:
-        logger.error(f"Agent failed: {system_prompt[:20]}... Error: {e}")
+        logger.error(f"Agent Execution Failed for prompt '{system_prompt[:30]}...'. Error: {e}", exc_info=True)
         # Return error as rationale so it appears in UI
         return {
             "rationale": f"Agent Error: {str(e)}",
