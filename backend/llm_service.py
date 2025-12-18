@@ -7,7 +7,10 @@ from pydantic import BaseModel, Field
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 
-from backend.advanced_analysis import AdvancedAnalyzer
+try:
+    from backend.advanced_analysis import AdvancedAnalyzer
+except ImportError:
+    from advanced_analysis import AdvancedAnalyzer
 
 load_dotenv()
 
