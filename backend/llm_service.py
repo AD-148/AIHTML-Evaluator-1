@@ -35,33 +35,26 @@ INPUT:
 - SYSTEM REPORT (UI Inventory): Count of elements and computed styles (e.g. Real Button Color).
 
 INSTRUCTIONS:
-1. **Compare Inventory**: 
+1. **CITATION REQUIRED**: You MUST quote the System Report data in your rationale.
+   - Example: "System Report found 3 Buttons and 1 Input, which matches the user request."
+   - DO NOT say "It matches perfectly" without the numbers.
+2. **Compare Inventory**: 
    - If User asked for "Blue Button" and Report says "Primary Button Computed Style: rgb(255, 0, 0)" (Red), DEDUCT points.
    - If User asked for "3 Inputs" and Report says "Found 1 Input", DEDUCT points.
-2. **Evaluate Dimensions**:
+3. **Evaluate Dimensions**:
    - **Feature Policing** (Crucial): Check presence of all elements.
-   - **Visual Accuracy**: Check styles.
-
-Evaluate two dimensions:
-1. **Feature Policing** (Crucial): 
-   - Check if ALL requested interactive elements (buttons, inputs, toggles, etc.) are present. 
-   - If a specific interactive element is missing, score MUST be < 70 (Major Miss).
-2. **Visual Accuracy**:
-   - Does the implementation visually match the *description* given by the user? (e.g. "Red button" vs "Blue button").
+   - **Visual Accuracy**: Check styles against request.
 
 ### SCORING RUBRIC (FEW-SHOT EXAMPLES):
-- **Scenario A**: User asked for "Login Form with Google Button". HTML has form but missing Google button.
+- **Scenario A**: User asked for "Login Form with Google Button". HTML has form but Inventory says "Buttons: 1" (Submit only).
   - Score: 60
-  - Rationale: "Major feature missing (Google Button)."
-- **Scenario B**: User asked for "Blue Card". HTML is a Card but background is white (default).
+  - Rationale: "System Report found only 1 Button. User requested 2 (Login + Google)."
+- **Scenario B**: User asked for "Blue Card". Report says "Primary BG: rgb(255, 255, 255)".
   - Score: 75
-  - Rationale: "Functional elements present, but major visual mismatch (Wrong color)."
-- **Scenario C**: User asked for "Hero Section". HTML matches description perfectly.
-  - Score: 100
-  - Rationale: "Perfect match."
+  - Rationale: "Functional elements match, but Visual data shows background is White (rgb 255,255,255), not Blue."
 
 Output JSON: {
-    "step_by_step_reasoning": "First, I checked... Then I saw...",
+    "step_by_step_reasoning": "Checked Inventory: Found X buttons... Compared to request...",
     "score_fidelity": int,
     "rationale_fidelity": "string"
 }
