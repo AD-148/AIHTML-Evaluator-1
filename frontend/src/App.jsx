@@ -214,6 +214,12 @@ const App = () => {
             >
               <i className="fa-solid fa-eye"></i> Preview
             </button>
+            <button
+              className={`tab-btn ${activeTab === 'logs' ? 'active' : ''}`}
+              onClick={() => setActiveTab('logs')}
+            >
+              <i className="fa-solid fa-terminal"></i> Test Log
+            </button>
           </div>
 
           {/* TAB CONTENT AREA */}
@@ -385,6 +391,53 @@ const App = () => {
                 </div>
               )
             }
+
+            {/* 4. LOGS TAB */}
+            {activeTab === 'logs' && (
+              <div className="fade-in" style={{ height: '100%', overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                {!latestAnalysis && <div className="results-placeholder"><p>Run evaluation to see execution logs.</p></div>}
+
+                {latestAnalysis && latestAnalysis.execution_trace && (
+                  <div className="logs-container" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {latestAnalysis.execution_trace.map((log, idx) => {
+                      // Icon mapping
+                      const iconMap = {
+                        ":rocket:": "🚀", ":mag_right:": "🔎", ":computer:": "💻",
+                        ":desktop_computer:": "🖥️", ":wheelchair:": "♿", ":clipboard:": "📋",
+                        ":art:": "🎨", ":iphone:": "📱", ":keyboard:": "⌨️",
+                        ":point_up_2:": "👆", ":warning:": "⚠️", ":calling:": "📲"
+                      };
+
+                      let displayLog = log;
+                      let icon = "🔹";
+
+                      for (const [key, val] of Object.entries(iconMap)) {
+                        if (log.includes(key)) {
+                          icon = val;
+                          displayLog = log.replace(key, "").trim();
+                          break;
+                        }
+                      }
+
+                      return (
+                        <div key={idx} style={{
+                          display: 'flex', gap: '0.8rem', padding: '0.6rem',
+                          background: '#0f172a', borderRadius: '0.4rem', borderLeft: '3px solid #6366f1',
+                          alignItems: 'center'
+                        }}>
+                          <span style={{ fontSize: '1.2rem' }}>{icon}</span>
+                          <span style={{ color: '#cbd5e1' }}>{displayLog}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {latestAnalysis && !latestAnalysis.execution_trace && (
+                  <div style={{ padding: '1rem', color: '#94a3b8' }}>No generic trace available.</div>
+                )}
+              </div>
+            )}
           </div >
         </div >
       </main >

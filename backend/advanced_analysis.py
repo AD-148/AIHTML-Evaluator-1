@@ -34,14 +34,21 @@ class AdvancedAnalyzer:
             "warnings": [],
             "stats": {"interactive_elements": 0, "images": 0},
             "score_cap": 100,
-            "mobile_logs": []
+            "mobile_logs": [],
+            "execution_trace": []  # NEW: Full Linear Execution Log
         }
+        self._log_trace("rocket", "Initialized AdvancedAnalyzer Engine.")
+
+    def _log_trace(self, icon: str, message: str):
+        """Appends a structured log entry for the UI trace."""
+        self.logs["execution_trace"].append(f":{icon}: {message}")
 
     def analyze(self) -> Dict[str, str]:
         """
         SINGLE-PASS ANALYSIS: Launches Browser ONCE, runs all checks sequentially.
         Returns dictionary of all context summaries.
         """
+        self._log_trace("mag_right", "Starting Static Code Analysis (BeautifulSoup)...")
         # 1. Structural Checks (No Browser)
         self._run_bs4_checks()
         self._check_links()
@@ -55,7 +62,8 @@ class AdvancedAnalyzer:
             "access": "",
             "mobile": "",
             "fidelity": "",
-            "visual": ""
+            "visual": "",
+            "trace": []
         }
 
         # 2. Browser-Based Checks (Axe, Mobile, Fidelity, Visual)
@@ -65,13 +73,16 @@ class AdvancedAnalyzer:
             results["mobile"] = err
             results["fidelity"] = err
             results["visual"] = err
+            results["trace"] = self.logs["execution_trace"]
             return results
 
         try:
+            self._log_trace("computer", "Launching Headless Chromium Browser...")
             with sync_playwright() as p:
                 browser = p.chromium.launch()
                 try:
                     # Create a context that mimics a decent desktop for initial Fidelity/Visual checks
+                    self._log_trace("desktop_computer", "Created Desktop Context (1280x720)")
                     context = browser.new_context(viewport={'width': 1280, 'height': 720}) 
                     page = context.new_page()
                     # Capture Console Logs
@@ -81,6 +92,7 @@ class AdvancedAnalyzer:
                     page.set_content(self.html_content)
                     
                     # --- PHASE A: AXE ACCESSIBILITY ---
+                    self._log_trace("wheelchair", "Starting Axe-Core Accessibility Audit...")
                     try:
                         axe_results = Axe().run(page)
                         for violation in axe_results.get("violations", []):
@@ -98,6 +110,7 @@ class AdvancedAnalyzer:
                         self.logs["warnings"].append(f"Axe Scan Failed: {e}")
 
                     # --- PHASE B: FIDELITY UI INVENTORY ---
+                    self._log_trace("clipboard", "Scanning UI Inventory (Buttons, Inputs, Images)...")
                     inventory = {"components": {}, "styles": {}, "text_preview": ""}
                     try:
                         inventory["components"]["buttons"] = page.locator("button, input[type='button'], input[type='submit'], a[class*='btn']").count()
@@ -117,6 +130,7 @@ class AdvancedAnalyzer:
                     results["fidelity"] = self._generate_fidelity_summary(inventory)
 
                     # --- PHASE C: VISUAL STYLE DNA ---
+                    self._log_trace("art", "Extracting Visual Style DNA (Fonts, Tokens)...")
                     dna = {"font_family": "Unknown", "modern_css": []}
                     try:
                         dna["font_family"] = page.evaluate("window.getComputedStyle(document.body).fontFamily")
@@ -138,22 +152,36 @@ class AdvancedAnalyzer:
                     # --- PHASE D: MOBILE SIMULATION (Resize Page) ---
                     # 1. Portrait
                     try:
+                        self._log_trace("iphone", "Resizing Viewport to iPhone 12 (390x844)...")
                         page.set_viewport_size({'width': 390, 'height': 844})
                         page.wait_for_timeout(200)
                         vp = page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
                         self.logs["mobile_logs"].append(f"Viewport Verified: {vp['width']}x{vp['height']}")
                         
-                        # Tap Test
-                        buttons = page.locator("button, a, input[type='button'], input[type='submit']")
-                        count = buttons.count()
-                        self.logs["mobile_logs"].append(f"Found {count} clickable targets.")
+                        # Interactive Elements Test (Buttons, Links, Inputs)
+                        elements = page.locator("button, a, input, textarea, select")
+                        count = elements.count()
+                        self.logs["mobile_logs"].append(f"Found {count} interactive targets.")
+                        
                         for i in range(min(count, 5)): # Limit to 5 checks for speed
-                            btn = buttons.nth(i)
-                            if btn.is_visible():
+                            el = elements.nth(i)
+                            if el.is_visible():
                                 try:
-                                    btn.tap(timeout=500) # Short timeout
-                                except:
-                                    self.logs["mobile_logs"].append(f"Target #{i+1}: FAILED TAP.")
+                                    tag = el.evaluate("el => el.tagName.toLowerCase()")
+                                    inputType = el.evaluate("el => el.getAttribute('type')")
+                                    
+                                    # Determine Interaction Type
+                                    if tag in ['input', 'textarea'] and inputType not in ['button', 'submit', 'checkbox', 'radio']:
+                                        el.fill("test")
+                                        self.logs["mobile_logs"].append(f"Target #{i+1} ({tag}): Typable.")
+                                        self._log_trace("keyboard", f"Typed 'test' into <{tag}> element")
+                                    else:
+                                        el.tap(timeout=500)
+                                        self.logs["mobile_logs"].append(f"Target #{i+1} ({tag}): Tappable.")
+                                        self._log_trace("point_up_2", f"Tapped <{tag}> element")
+                                except Exception as e:
+                                    self.logs["mobile_logs"].append(f"Target #{i+1}: FAILED INTERACTION.")
+                                    self._log_trace("warning", f"Failed to interact with Target #{i+1}")
                         
                         # 2. Landscape check
                         page.set_viewport_size({"width": 844, "height": 390})
@@ -180,6 +208,7 @@ class AdvancedAnalyzer:
                     # --- PHASE D2: ANDROID SIMULATION (Samsung Galaxy S20 / Pixel 5) ---
                     # Dimensions: 412x915
                     try:
+                        self._log_trace("calling", "Resizing Viewport to Samsung/Android (412x915)...")
                         page.set_viewport_size({'width': 412, 'height': 915})
                         page.wait_for_timeout(200)
                         vp = page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
@@ -211,6 +240,7 @@ class AdvancedAnalyzer:
             results["visual"] = err
             
         results["access"] = self._generate_access_summary()
+        results["trace"] = self.logs["execution_trace"]
         return results
 
     def _run_bs4_checks(self):

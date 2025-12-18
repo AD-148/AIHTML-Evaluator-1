@@ -23,6 +23,7 @@ class EvaluationResult(BaseModel):
     rationale: str = Field(..., description="Detailed explanation of the scores. Explicitly mention any criteria scoring below 70.")
     final_judgement: str = Field(..., description="Brief summary judgement")
     fixed_html: Optional[str] = Field(None, description="The improved/fixed HTML code if requested by the user")
+    execution_trace: List[str] = Field(default_factory=list, description="Linear log of all backend tool actions")
 
 # Prompts for Specialized Agents
 
@@ -234,6 +235,7 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
     context_mobile = ""
     context_fidelity = ""
     context_visual = ""
+    execution_trace = []
     
     if last_html:
         try:
@@ -243,12 +245,14 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
             context_mobile = results["mobile"]
             context_fidelity = results["fidelity"]
             context_visual = results["visual"]
+            execution_trace = results.get("trace", [])
         except Exception as e:
             logger.error(f"Advanced Analysis Pipeline Failed completely. Falling back to empty contexts. Error: {e}", exc_info=True)
             context_access = f"System Error: {str(e)}"
             context_mobile = "Mobile Simulation skipped due to error."
             context_fidelity = "Fidelity Check skipped due to error."
             context_visual = "Visual Check skipped due to error."
+            execution_trace = ["error: Advanced Analysis Failed completely."]
 
     # 3. RUN MULTI-AGENT EVALUATION (5 Agents)
     try:
@@ -328,8 +332,10 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
         # though the Accessibility Agent should have handled it.
         
         # No longer need manual capping here as the Agent Prompt instructions (+ Context) handle it better.
+        # No longer need manual capping here as the Agent Prompt instructions (+ Context) handle it better.
         # But we can keep a safeguard if needed. For now, trusting the "Tool-Augmented" prompt.
 
+        final_verdict["execution_trace"] = execution_trace
         return EvaluationResult(**final_verdict)
 
     except Exception as e:
@@ -379,7 +385,8 @@ def _get_mock_result(error_msg=""):
         score_visual=40,
         rationale=f"[MOCK/ERROR] System returned mock data. {error_msg}. Visual score is low to demonstrate strictness.",
         final_judgement="Mock Result",
-        fixed_html="<div>Mock Fixed HTML</div>"
+        fixed_html="<div>Mock Fixed HTML</div>",
+        execution_trace=[":rocket: Mock Trace Started", ":mag: Scanning Code...", ":warning: Mock Mode Active"]
     )
 
 def _normalize_keys(result_dict: Dict, target_score_key: str):

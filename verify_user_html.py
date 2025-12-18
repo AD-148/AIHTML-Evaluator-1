@@ -216,5 +216,15 @@ def verify_tool_signals():
     print("\n[4] FIDELITY AGENT EVIDENCE (Inventory):")
     print(results['fidelity'])
 
+    # 5. EXECUTION TRACE: Full Linear Log
+    print("\n[5] EXECUTION TRACE (New Feature):")
+    for step in results.get('trace', []):
+        print(step)
+
+    # 5. EXECUTION TRACE: Full Linear Log
+    print("\n[5] EXECUTION TRACE (New Feature):")
+    for line in results.get("trace", []):
+        print(line)
+
 if __name__ == "__main__":
     verify_tool_signals()
