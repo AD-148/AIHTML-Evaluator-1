@@ -1,6 +1,7 @@
 {
     "devCommand": "npm run dev",
     "buildCommand": "npm run build",
+    "installCommand": "pip install -r requirements.txt && playwright install chromium",
     "outputDirectory": "frontend/dist",
     "rewrites": [
         {
