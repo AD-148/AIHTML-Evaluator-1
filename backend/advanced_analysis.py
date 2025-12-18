@@ -9,14 +9,15 @@ from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# Optional imports with graceful degradation
-try:
-    from axe_core_python.sync_playwright import Axe
-    from playwright.sync_api import sync_playwright
-    AXE_AVAILABLE = True
-except ImportError:
-    AXE_AVAILABLE = False
-    logger.warning("Axe/Playwright not installed. Accessibility checks will be limited to BeautifulSoup.")
+# Optional imports with graceful degradation -> DISABLED FOR DEBUGGING
+# try:
+from axe_core_python.sync_playwright import Axe
+from playwright.sync_api import sync_playwright
+AXE_AVAILABLE = True
+print(f"DEBUG: AdvancedAnalyzer Imported. AXE_AVAILABLE={AXE_AVAILABLE}")
+# except ImportError:
+#     AXE_AVAILABLE = False
+#     logger.warning("Axe/Playwright not installed. Accessibility checks will be limited to BeautifulSoup.")
 
 try:
     import html5validator
@@ -37,7 +38,7 @@ class AdvancedAnalyzer:
             "mobile_logs": [],
             "execution_trace": []  # NEW: Full Linear Execution Log
         }
-        self._log_trace("rocket", "Initialized AdvancedAnalyzer Engine.")
+        self._log_trace("rocket", "Initialized AdvancedAnalyzer Engine. [VERSION: RELOAD_VERIFIED]")
 
     def _log_trace(self, icon: str, message: str):
         """Appends a structured log entry for the UI trace."""
@@ -48,13 +49,16 @@ class AdvancedAnalyzer:
         SINGLE-PASS ANALYSIS: Launches Browser ONCE, runs all checks sequentially.
         Returns dictionary of all context summaries.
         """
-        self._log_trace("mag_right", "Starting Static Code Analysis (BeautifulSoup)...")
+        self._log_trace("mag_right", f"Starting Static Code Analysis. AXE_AVAILABLE={AXE_AVAILABLE}")
         # 1. Structural Checks (No Browser)
         self._run_bs4_checks()
+        self._log_trace("mag", "BS4 Checks Complete.")
         self._check_links()
+        self._log_trace("link", "Link Checks Complete.")
         if HTML5_AVAILABLE:
             try:
                 self._run_html5_validation()
+                self._log_trace("clipboard", "HTML5 Validation Complete.")
             except Exception as e:
                 logger.error(f"HTML5 Validator Execution Failed (Java/vnu.jar missing?). Error: {e}", exc_info=True)
 
@@ -68,6 +72,7 @@ class AdvancedAnalyzer:
 
         # 2. Browser-Based Checks (Axe, Mobile, Fidelity, Visual)
         if not AXE_AVAILABLE:
+            self._log_trace("warning", "Playwright/Axe-core libraries not found. Skipping Browser Tests.")
             err = "[UNAVAILABLE] (Playwright not installed)."
             results["access"] = self._generate_access_summary() # Still returns BS4 findings
             results["mobile"] = err

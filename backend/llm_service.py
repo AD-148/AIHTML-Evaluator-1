@@ -226,9 +226,12 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
     
     # MOCK/VALIDATION Check
     if not api_key or not api_key.strip().startswith("sk-"):
-        return _get_mock_result()
+        # return _get_mock_result()
+        logger.warning("Mock Mode: Proceeding with Local Analysis before returning mock.")
+        api_key = None # Force to None so later checks work correctly
 
-    client = AsyncOpenAI(api_key=api_key)
+    # client = AsyncOpenAI(api_key=api_key) # MOVED DOWN
+
 
     # 2. RUN ADVANCED ANALYSIS
     context_access = ""
@@ -256,6 +259,15 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
             execution_trace = [f"error: Advanced Analysis Canceled. Exception: {str(e)}"]
 
     # 3. RUN MULTI-AGENT EVALUATION (5 Agents)
+    if not api_key:
+        mock = _get_mock_result()
+        # Inject the REAL trace into the mock result
+        mock.execution_trace = execution_trace
+        logger.info(f"DEBUG: Returning Mock. Captured Trace Length: {len(execution_trace)}")
+        print(f"DEBUG: Captured Trace: {execution_trace}")
+        return mock
+        
+    client = AsyncOpenAI(api_key=api_key)
     try:
         results = await asyncio.gather(
             _run_agent(client, PROMPT_ACCESSIBILITY, messages, context_access),
