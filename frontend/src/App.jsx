@@ -141,7 +141,7 @@ const App = () => {
   return (
     <div className="app-container">
       <header>
-        <h1>AI HTML Judge v2.0 (5-Agent)</h1>
+        <h1>AI HTML Judge v3.0 (Hybrid Tool-Augmented)</h1>
       </header>
 
       <main className="main-grid">
