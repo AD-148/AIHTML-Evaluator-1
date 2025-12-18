@@ -90,7 +90,7 @@ class AdvancedAnalyzer:
                 try:
                     # Create a context that mimics a decent desktop for initial Fidelity/Visual checks
                     self._log_trace("desktop_computer", "Created Desktop Context (1280x720)")
-                    context = await browser.new_context(viewport={'width': 1280, 'height': 720}) 
+                    context = await browser.new_context(viewport={'width': 1280, 'height': 720}, has_touch=True) 
                     page = await context.new_page()
                     # Capture Console Logs
                     console_logs = []
@@ -191,8 +191,8 @@ class AdvancedAnalyzer:
                                         self.logs["mobile_logs"].append(f"Target #{i+1} ({tag}): Tappable.")
                                         self._log_trace("point_up_2", f"Tapped <{tag}> element")
                                 except Exception as e:
-                                    self.logs["mobile_logs"].append(f"Target #{i+1}: FAILED INTERACTION.")
-                                    self._log_trace("warning", f"Failed to interact with Target #{i+1}")
+                                    self.logs["mobile_logs"].append(f"Target #{i+1}: FAILED INTERACTION. Error: {e}")
+                                    self._log_trace("warning", f"Failed to interact with Target #{i+1}: {e}")
                         
                         # 2. Landscape check
                         await page.set_viewport_size({"width": 844, "height": 390})
