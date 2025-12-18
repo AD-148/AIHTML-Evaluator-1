@@ -175,6 +175,14 @@ class AdvancedAnalyzer:
                         elements = page.locator("button, a, input, textarea, select")
                         count = await elements.count()
                         self.logs["mobile_logs"].append(f"Found {count} interactive targets.")
+
+                        # --- CRITICAL JS CHECK ---
+                        # If page already has syntax errors, interacting is pointless/false-positive
+                        has_critical_error = any("error" in log.lower() or "exception" in log.lower() for log in console_logs)
+                        if has_critical_error:
+                             self.logs["mobile_logs"].append(f"[FAIL] Skipping Interaction Test: Critical JS Errors detected on load.")
+                             self._log_trace("x", f"[FAIL] Interactions Skipped: Page contains critical JS errors.")
+                             count = 0 # Force loop skip
                         
                         for i in range(min(count, 5)): # Limit to 5 checks for speed
                             el = elements.nth(i)
