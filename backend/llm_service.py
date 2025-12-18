@@ -124,7 +124,7 @@ Your goal is to ensure this HTML renders perfectly in a Mobile SDK environment.
 
 INPUT:
 - User HTML Code
-- SYSTEM REPORT (Truth Source): Logs from a real Mobile Viewport Simulation (iPhone 12).
+- SYSTEM REPORT (Truth Source): Logs from Mobile Viewport Simulations (iPhone 12 & Samsung/Android).
 
 INSTRUCTIONS:
 1. **Trust the Simulation**: 
@@ -132,6 +132,7 @@ INSTRUCTIONS:
    - If the log says "Runtime Errors Detected", deduct -15 pts.
    - If "LANDSCAPE FAIL" is present, deduct -10 pts.
 2. **Evaluate**:
+   - **Cross-Platform**: Check if design works on BOTH "Viewport Verified: 390x844" (iOS) and "Android Viewport" (412x915).
    - **OS Compatibility**: `safe-area-inset`, `-webkit-` prefixes.
    - **Viewport**: Must have correct `<meta name="viewport">`.
    - **Orientation**: Check if design works in both Portrait and Landscape (via logs).

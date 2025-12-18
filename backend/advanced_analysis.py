@@ -160,8 +160,29 @@ class AdvancedAnalyzer:
                         self.logs["mobile_logs"].append("LANDSCAPE PASS: No horizontal scroll.")
                         
                 except Exception as e:
-                    logger.error(f"Phase D (Mobile) Failed: {e}")
-                    self.logs["mobile_logs"].append(f"Mobile Check Crash: {e}")
+                    logger.error(f"Phase D (Mobile iOS) Failed: {e}")
+                    self.logs["mobile_logs"].append(f"iOS Check Crash: {e}")
+
+                # --- PHASE D2: ANDROID SIMULATION (Samsung Galaxy S20 / Pixel 5) ---
+                # Dimensions: 412x915
+                try:
+                    page.set_viewport_size({'width': 412, 'height': 915})
+                    page.wait_for_timeout(200)
+                    vp = page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
+                    self.logs["mobile_logs"].append(f"Android Viewport Verified: {vp['width']}x{vp['height']}")
+                    
+                    # Quick Tap Test for Android (Just checking first button to ensure no layout shift blocked it)
+                    btn = page.locator("button, a, input[type='button'], input[type='submit']").first
+                    if btn.is_visible():
+                        try:
+                            btn.tap(timeout=500)
+                            self.logs["mobile_logs"].append(f"Android Target Check: Tappable.")
+                        except:
+                             self.logs["mobile_logs"].append(f"Android Target Check: FAILED TAP (Layout Shift?).")
+
+                except Exception as e:
+                    logger.error(f"Phase D2 (Android) Failed: {e}")
+                    self.logs["mobile_logs"].append(f"Android Check Crash: {e}")
                 
                 results["mobile"] = self._generate_mobile_summary()
 
