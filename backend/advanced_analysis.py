@@ -240,6 +240,7 @@ class AdvancedAnalyzer:
         except Exception as e:
             logger.error(f"Single-Pass Browser Session Failed: {e}", exc_info=True)
             err = f"System Error: {str(e)}"
+            self._log_trace("boom", f"Browser Session Failed: {e}")
             results["mobile"] = err
             results["fidelity"] = err
             results["visual"] = err
