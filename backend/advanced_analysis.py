@@ -118,6 +118,12 @@ class AdvancedAnalyzer:
                                 self.logs["score_cap"] = min(self.logs["score_cap"], 50 if impact == 'critical' else 70)
                             else:
                                 self.logs["warnings"].append(msg)
+                        
+                        if not axe_results.get("violations"):
+                            self._log_trace("white_check_mark", "[PASS] Axe Accessibility: No violations found.")
+                        else:
+                            count = len(axe_results.get("violations"))
+                            self._log_trace("x", f"[FAIL] Axe Accessibility: Found {count} rule violations.")
                     except Exception as e:
                         logger.error(f"Phase A (Axe) Failed: {e}")
                         self.logs["warnings"].append(f"Axe Scan Failed (Possible Network/Script Error): {e}")
@@ -160,6 +166,13 @@ class AdvancedAnalyzer:
                         dna["modern_css"] = features
                     except Exception as e:
                         logger.error(f"Phase C (Visual) Failed: {e}")
+                    
+                    # Log Visual Verdict
+                    if "times" in dna['font_family'].lower() or "serif" in dna['font_family'].lower() and "sans" not in dna['font_family'].lower():
+                         self._log_trace("x", f"[FAIL] Typography: Outdated font detected ('{dna['font_family']}').")
+                    else:
+                         self._log_trace("white_check_mark", f"[PASS] Typography: Modern font detected ('{dna['font_family']}').")
+                         
                     results["visual"] = self._generate_visual_summary(dna)
 
                     # --- PHASE D: MOBILE SIMULATION (Resize Page) ---
@@ -176,33 +189,46 @@ class AdvancedAnalyzer:
                         count = await elements.count()
                         self.logs["mobile_logs"].append(f"Found {count} interactive targets.")
 
-                        # --- CRITICAL JS CHECK ---
-                        # If page already has syntax errors, interacting is pointless/false-positive
-                        has_critical_error = any("error" in log.lower() or "exception" in log.lower() for log in console_logs)
-                        if has_critical_error:
-                             self.logs["mobile_logs"].append(f"[FAIL] Skipping Interaction Test: Critical JS Errors detected on load.")
-                             self._log_trace("x", f"[FAIL] Interactions Skipped: Page contains critical JS errors.")
-                             count = 0 # Force loop skip
-                        
                         for i in range(min(count, 5)): # Limit to 5 checks for speed
                             el = elements.nth(i)
                             if await el.is_visible():
                                 try:
                                     tag = await el.evaluate("el => el.tagName.toLowerCase()")
+                                    text = await el.text_content()
+                                    text = text.strip()[:20] if text else "logging-in"
+                                    
+                                    # Log Intent
+                                    self._log_trace("point_right", f"[INFO] Mobile: Approaching target #{i+1} (<{tag}> '{text}')...")
+                                    
+                                    # Scroll info
+                                    await el.scroll_into_view_if_needed()
+                                    
                                     inputType = await el.evaluate("el => el.getAttribute('type')")
                                     
                                     # Determine Interaction Type
                                     if tag in ['input', 'textarea'] and inputType not in ['button', 'submit', 'checkbox', 'radio']:
                                         await el.fill("test")
                                         self.logs["mobile_logs"].append(f"Target #{i+1} ({tag}): Typable.")
-                                        self._log_trace("keyboard", f"Typed 'test' into <{tag}> element")
+                                        self._log_trace("keyboard", f"[PASS] Mobile: Typed 'test' into <{tag}>.")
                                     else:
-                                        await el.tap(timeout=500)
-                                        self.logs["mobile_logs"].append(f"Target #{i+1} ({tag}): Tappable.")
-                                        self._log_trace("point_up_2", f"Tapped <{tag}> element")
+                                        # Capture URL before
+                                        url_before = page.url
+                                        
+                                        # Tap
+                                        await el.tap(timeout=1000)
+                                        
+                                        # Check URL after
+                                        url_after = page.url
+                                        if url_before != url_after:
+                                             self._log_trace("rocket", f"[PASS] Mobile: Tapped <{tag}> and navigated to {url_after}.")
+                                             self.logs["mobile_logs"].append(f"Target #{i+1}: Triggered Navigation.")
+                                        else:
+                                             self._log_trace("white_check_mark", f"[PASS] Mobile: Tapped <{tag}> successfully (No navigation detected).")
+                                             self.logs["mobile_logs"].append(f"Target #{i+1} ({tag}): Tappable.")
+                                             
                                 except Exception as e:
                                     self.logs["mobile_logs"].append(f"Target #{i+1}: FAILED INTERACTION. Error: {e}")
-                                    self._log_trace("x", f"[FAIL] Target #{i+1}: Interaction failed. Error: {e}")
+                                    self._log_trace("x", f"[FAIL] Mobile: Failed to tap target #{i+1}. Error: {e}")
                         
                         # 2. Landscape check
                         await page.set_viewport_size({"width": 844, "height": 390})
@@ -279,9 +305,14 @@ class AdvancedAnalyzer:
 
         # Critical: Missing Alt
         for i, img in enumerate(imgs):
-            if not img.get('alt') and img.get('role') != 'presentation':
-                self.logs["critical"].append(f"Image <img src='{img.get('src', 'unknown')}'> is missing 'alt' text.")
-                self.logs["score_cap"] = min(self.logs["score_cap"], 60)
+            if i < 5: # Log first 5 only to avoid spam
+                src = img.get('src', 'unknown')
+                if not img.get('alt') and img.get('role') != 'presentation':
+                    self.logs["critical"].append(f"Image <img src='{src}'> is missing 'alt' text.")
+                    self._log_trace("x", f"[FAIL] Image #{i+1}: Missing 'alt' text (src='{src[:20]}...').")
+                    self.logs["score_cap"] = min(self.logs["score_cap"], 60)
+                else:
+                    self._log_trace("white_check_mark", f"[PASS] Image #{i+1}: Has valid 'alt' text.")
 
         # Critical: Broken Interactive Config
         for i, btn in enumerate(buttons):
@@ -289,11 +320,22 @@ class AdvancedAnalyzer:
                 text = btn.get_text(strip=True)
                 aria_label = btn.get('aria-label')
                 title = btn.get('title')
-                if not text and not aria_label and not title:
-                     child_img = btn.find('img')
-                     if child_img and child_img.get('alt'): continue
+                
+                # Check accessibility
+                is_accessible = False
+                if text or aria_label or title:
+                    is_accessible = True
+                else:
+                    child_img = btn.find('img')
+                    if child_img and child_img.get('alt'): 
+                        is_accessible = True
+
+                if not is_accessible:
                      self.logs["critical"].append(f"Interactive element <{btn.name}> has no accessible name.")
+                     if i < 5: self._log_trace("x", f"[FAIL] Button #{i+1} (<{btn.name}>): No accessible name (text/aria-label).")
                      self.logs["score_cap"] = min(self.logs["score_cap"], 60)
+                elif i < 5:
+                     self._log_trace("white_check_mark", f"[PASS] Button #{i+1} (<{btn.name}>): Has accessible name.")
 
 
 
@@ -307,15 +349,22 @@ class AdvancedAnalyzer:
     def _check_links(self):
         """Basic Link Checker logic."""
         links = self.soup.find_all('a', href=True)
-        for link in links:
+        for i, link in enumerate(links):
+            if i >= 5: break # Limit logs
             href = link['href']
             if href.startswith('#'):
                 # Internal anchor check
                 target_id = href[1:]
                 if target_id and not self.soup.find(id=target_id):
                     self.logs["warnings"].append(f"Broken Internal Link: href='{href}' points to non-existent ID.")
+                    self._log_trace("x", f"[FAIL] Link #{i+1}: Broken internal anchor ({href}).")
+                else:
+                    self._log_trace("white_check_mark", f"[PASS] Link #{i+1}: Valid internal anchor ({href}).")
             elif not href.startswith(('http', 'mailto', 'tel', '/')):
                  self.logs["warnings"].append(f"Suspicious Link: href='{href}' is likely invalid.")
+                 self._log_trace("x", f"[FAIL] Link #{i+1}: Invalid href format ({href}).")
+            else:
+                 self._log_trace("white_check_mark", f"[PASS] Link #{i+1}: Valid href format ({href}).")
 
 
 
