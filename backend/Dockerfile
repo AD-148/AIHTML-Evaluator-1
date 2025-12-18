@@ -16,6 +16,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright Browsers and System Dependencies
+# Install Playwright Browsers and System Dependencies
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN mkdir -p /ms-playwright && chmod 777 /ms-playwright
 RUN python -m playwright install --with-deps chromium
 
 # Copy the current directory contents into the container at /app
