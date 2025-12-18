@@ -95,8 +95,10 @@ class AdvancedAnalyzer:
                     # Capture Console Logs
                     console_logs = []
                     page.on("console", lambda msg: console_logs.append(f"CONSOLE [{msg.type}]: {msg.text}"))
+                    page.on("pageerror", lambda exc: console_logs.append(f"CONSOLE [CRITICAL_ERROR]: {exc}"))
 
                     await page.set_content(self.html_content)
+
                     
                     # --- PHASE A: AXE ACCESSIBILITY (Manual Injection) ---
                     self._log_trace("wheelchair", "Starting Axe-Core Accessibility Audit...")
@@ -208,8 +210,9 @@ class AdvancedAnalyzer:
                         self.logs["mobile_logs"].append(f"iOS Check Crash: {e}")
 
                     # --- PHASE D1.5: RUNTIME ERROR CHECK ---
-                    errors = [log for log in console_logs if "error" in log.lower()]
+                    errors = [log for log in console_logs if "error" in log.lower() or "exception" in log.lower()]
                     if errors:
+                        self.logs["mobile_logs"].insert(0, f"!!! CRITICAL JS ERRORS DETECTED ({len(errors)}) !!!")
                         self.logs["mobile_logs"].append(f"Runtime Errors Detected: {len(errors)} found.")
                         for err in errors[:3]:
                             self.logs["mobile_logs"].append(f"- {err}")
