@@ -211,20 +211,29 @@ class AdvancedAnalyzer:
                                         self.logs["mobile_logs"].append(f"Target #{i+1} ({tag}): Typable.")
                                         self._log_trace("keyboard", f"[PASS] Mobile: Typed 'test' into <{tag}>.")
                                     else:
-                                        # Capture URL before
+                                        # Capture State Before
                                         url_before = page.url
+                                        html_before = await page.content()
                                         
                                         # Tap
                                         await el.tap(timeout=1000)
+                                        await page.wait_for_timeout(600) # Wait for JS/Animation
                                         
-                                        # Check URL after
+                                        # Capture State After
                                         url_after = page.url
+                                        html_after = await page.content()
+                                        
+                                        # Verify State Change
                                         if url_before != url_after:
                                              self._log_trace("rocket", f"[PASS] Mobile: Tapped <{tag}> and navigated to {url_after}.")
                                              self.logs["mobile_logs"].append(f"Target #{i+1}: Triggered Navigation.")
+                                        elif html_before != html_after:
+                                             self._log_trace("white_check_mark", f"[PASS] Mobile: Tapped <{tag}> and triggered UI update.")
+                                             self.logs["mobile_logs"].append(f"Target #{i+1}: Triggered Visual Update.")
                                         else:
-                                             self._log_trace("white_check_mark", f"[PASS] Mobile: Tapped <{tag}> successfully (No navigation detected).")
-                                             self.logs["mobile_logs"].append(f"Target #{i+1} ({tag}): Tappable.")
+                                             # No change detected -> Likely broken listener
+                                             self._log_trace("x", f"[FAIL] Mobile: Tapped <{tag}> but page state did not change (Unresponsive).")
+                                             self.logs["mobile_logs"].append(f"Target #{i+1}: Unresponsive (No DOM/URL change).")
                                              
                                 except Exception as e:
                                     self.logs["mobile_logs"].append(f"Target #{i+1}: FAILED INTERACTION. Error: {e}")
