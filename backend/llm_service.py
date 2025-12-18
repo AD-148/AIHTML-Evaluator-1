@@ -244,7 +244,7 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
         try:
             # Run unified single-pass analysis
             analyzer = AdvancedAnalyzer(last_html)
-            results = analyzer.analyze()
+            results = await analyzer.analyze()
             context_access = results["access"]
             context_mobile = results["mobile"]
             context_fidelity = results["fidelity"]

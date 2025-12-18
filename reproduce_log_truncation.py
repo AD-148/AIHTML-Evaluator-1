@@ -1,3 +1,4 @@
+import asyncio
 from backend.advanced_analysis import AdvancedAnalyzer
 import logging
 
@@ -15,12 +16,16 @@ html_content = """
 </html>
 """
 
-print("--- Starting Reproduction Script ---")
-analyzer = AdvancedAnalyzer(html_content)
-results = analyzer.analyze()
+async def main():
+    print("--- Starting Reproduction Script (Async) ---")
+    analyzer = AdvancedAnalyzer(html_content)
+    results = await analyzer.analyze()
 
-print("\n--- Execution Trace ---")
-for line in results.get("trace", []):
-    print(line)
+    print("\n--- Execution Trace ---")
+    for line in results.get("trace", []):
+        print(line)
 
-print("\n--- End of Trace ---")
+    print("\n--- End of Trace ---")
+
+if __name__ == "__main__":
+    asyncio.run(main())

@@ -6,18 +6,20 @@ import re
 import subprocess
 from bs4 import BeautifulSoup
 from typing import Dict, Any, List, Optional
+import asyncio
 
 logger = logging.getLogger(__name__)
 
 # Optional imports with graceful degradation
 try:
-    from axe_core_python.sync_playwright import Axe
-    from playwright.sync_api import sync_playwright
-    AXE_AVAILABLE = True
-    print(f"DEBUG: AdvancedAnalyzer Imported. AXE_AVAILABLE={AXE_AVAILABLE}")
+    from playwright.async_api import async_playwright
+    PLAYWRIGHT_AVAILABLE = True
 except ImportError as e:
-    AXE_AVAILABLE = False
-    logger.warning(f"Axe/Playwright not installed or failed to import: {e}. Accessibility checks will be limited to BeautifulSoup.")
+    PLAYWRIGHT_AVAILABLE = False
+    logger.warning(f"Playwright not installed: {e}. Browser checks will be skipped.")
+
+# We will handle Axe manually via script injection if possible, or skip it to avoid Sync/Async conflicts with the wrapper library.
+AXE_SCRIPT_URL = "https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.0/axe.min.js" 
 
 try:
     import html5validator
@@ -38,18 +40,18 @@ class AdvancedAnalyzer:
             "mobile_logs": [],
             "execution_trace": []  # NEW: Full Linear Execution Log
         }
-        self._log_trace("rocket", "Initialized AdvancedAnalyzer Engine. [VERSION: RELOAD_VERIFIED]")
+        self._log_trace("rocket", "Initialized AdvancedAnalyzer Engine. [ASYNC MODE]")
 
     def _log_trace(self, icon: str, message: str):
         """Appends a structured log entry for the UI trace."""
         self.logs["execution_trace"].append(f":{icon}: {message}")
 
-    def analyze(self) -> Dict[str, str]:
+    async def analyze(self) -> Dict[str, str]:
         """
-        SINGLE-PASS ANALYSIS: Launches Browser ONCE, runs all checks sequentially.
+        SINGLE-PASS ANALYSIS: Launches Browser ONCE (Async), runs all checks sequentially.
         Returns dictionary of all context summaries.
         """
-        self._log_trace("mag_right", f"Starting Static Code Analysis. AXE_AVAILABLE={AXE_AVAILABLE}")
+        self._log_trace("mag_right", f"Starting Static Code Analysis. PLAYWRIGHT_AVAILABLE={PLAYWRIGHT_AVAILABLE}")
         # 1. Structural Checks (No Browser)
         self._run_bs4_checks()
         self._log_trace("mag", "BS4 Checks Complete.")
@@ -60,7 +62,7 @@ class AdvancedAnalyzer:
                 self._run_html5_validation()
                 self._log_trace("clipboard", "HTML5 Validation Complete.")
             except Exception as e:
-                logger.error(f"HTML5 Validator Execution Failed (Java/vnu.jar missing?). Error: {e}", exc_info=True)
+                logger.error(f"HTML5 Validator Execution Failed. Error: {e}", exc_info=True)
 
         results = {
             "access": "",
@@ -71,8 +73,8 @@ class AdvancedAnalyzer:
         }
 
         # 2. Browser-Based Checks (Axe, Mobile, Fidelity, Visual)
-        if not AXE_AVAILABLE:
-            self._log_trace("warning", "Playwright/Axe-core libraries not found. Skipping Browser Tests.")
+        if not PLAYWRIGHT_AVAILABLE:
+            self._log_trace("warning", "Playwright libraries not found. Skipping Browser Tests.")
             err = "[UNAVAILABLE] (Playwright not installed)."
             results["access"] = self._generate_access_summary() # Still returns BS4 findings
             results["mobile"] = err
@@ -82,24 +84,28 @@ class AdvancedAnalyzer:
             return results
 
         try:
-            self._log_trace("computer", "Launching Headless Chromium Browser...")
-            with sync_playwright() as p:
-                browser = p.chromium.launch()
+            self._log_trace("computer", "Launching Headless Chromium Browser (Async)...")
+            async with async_playwright() as p:
+                browser = await p.chromium.launch()
                 try:
                     # Create a context that mimics a decent desktop for initial Fidelity/Visual checks
                     self._log_trace("desktop_computer", "Created Desktop Context (1280x720)")
-                    context = browser.new_context(viewport={'width': 1280, 'height': 720}) 
-                    page = context.new_page()
+                    context = await browser.new_context(viewport={'width': 1280, 'height': 720}) 
+                    page = await context.new_page()
                     # Capture Console Logs
                     console_logs = []
                     page.on("console", lambda msg: console_logs.append(f"CONSOLE [{msg.type}]: {msg.text}"))
 
-                    page.set_content(self.html_content)
+                    await page.set_content(self.html_content)
                     
-                    # --- PHASE A: AXE ACCESSIBILITY ---
+                    # --- PHASE A: AXE ACCESSIBILITY (Manual Injection) ---
                     self._log_trace("wheelchair", "Starting Axe-Core Accessibility Audit...")
                     try:
-                        axe_results = Axe().run(page)
+                        # Inject Axe Core
+                        await page.add_script_tag(url=AXE_SCRIPT_URL)
+                        # Run Axe
+                        axe_results = await page.evaluate("axe.run()")
+                        
                         for violation in axe_results.get("violations", []):
                             impact = violation.get("impact")
                             help_text = violation.get("help")
@@ -112,22 +118,22 @@ class AdvancedAnalyzer:
                                 self.logs["warnings"].append(msg)
                     except Exception as e:
                         logger.error(f"Phase A (Axe) Failed: {e}")
-                        self.logs["warnings"].append(f"Axe Scan Failed: {e}")
+                        self.logs["warnings"].append(f"Axe Scan Failed (Possible Network/Script Error): {e}")
 
                     # --- PHASE B: FIDELITY UI INVENTORY ---
                     self._log_trace("clipboard", "Scanning UI Inventory (Buttons, Inputs, Images)...")
                     inventory = {"components": {}, "styles": {}, "text_preview": ""}
                     try:
-                        inventory["components"]["buttons"] = page.locator("button, input[type='button'], input[type='submit'], a[class*='btn']").count()
-                        inventory["components"]["inputs"] = page.locator("input:not([type='hidden'])").count()
-                        inventory["components"]["images"] = page.locator("img").count()
-                        text = page.inner_text("body")
+                        inventory["components"]["buttons"] = await page.locator("button, input[type='button'], input[type='submit'], a[class*='btn']").count()
+                        inventory["components"]["inputs"] = await page.locator("input:not([type='hidden'])").count()
+                        inventory["components"]["images"] = await page.locator("img").count()
+                        text = await page.inner_text("body")
                         inventory["text_preview"] = re.sub(r'\s+', ' ', text).strip()[:300] + "..."
                         
                         btn = page.locator("button, input[type='submit'], a[class*='btn']").first
-                        if btn.is_visible():
-                            rgb = btn.evaluate("el => window.getComputedStyle(el).backgroundColor")
-                            color = btn.evaluate("el => window.getComputedStyle(el).color")
+                        if await btn.is_visible():
+                            rgb = await btn.evaluate("el => window.getComputedStyle(el).backgroundColor")
+                            color = await btn.evaluate("el => window.getComputedStyle(el).color")
                             inventory["styles"]["primary_button_bg"] = rgb
                             inventory["styles"]["primary_button_text"] = color
                     except Exception as e:
@@ -138,8 +144,8 @@ class AdvancedAnalyzer:
                     self._log_trace("art", "Extracting Visual Style DNA (Fonts, Tokens)...")
                     dna = {"font_family": "Unknown", "modern_css": []}
                     try:
-                        dna["font_family"] = page.evaluate("window.getComputedStyle(document.body).fontFamily")
-                        features = page.evaluate("""() => {
+                        dna["font_family"] = await page.evaluate("window.getComputedStyle(document.body).fontFamily")
+                        features = await page.evaluate("""() => {
                             const el = document.querySelector('button') || document.querySelector('.card') || document.querySelector('div');
                             const style = window.getComputedStyle(el || document.body);
                             const features = [];
@@ -158,30 +164,30 @@ class AdvancedAnalyzer:
                     # 1. Portrait
                     try:
                         self._log_trace("iphone", "Resizing Viewport to iPhone 12 (390x844)...")
-                        page.set_viewport_size({'width': 390, 'height': 844})
-                        page.wait_for_timeout(200)
-                        vp = page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
+                        await page.set_viewport_size({'width': 390, 'height': 844})
+                        await page.wait_for_timeout(200)
+                        vp = await page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
                         self.logs["mobile_logs"].append(f"Viewport Verified: {vp['width']}x{vp['height']}")
                         
                         # Interactive Elements Test (Buttons, Links, Inputs)
                         elements = page.locator("button, a, input, textarea, select")
-                        count = elements.count()
+                        count = await elements.count()
                         self.logs["mobile_logs"].append(f"Found {count} interactive targets.")
                         
                         for i in range(min(count, 5)): # Limit to 5 checks for speed
                             el = elements.nth(i)
-                            if el.is_visible():
+                            if await el.is_visible():
                                 try:
-                                    tag = el.evaluate("el => el.tagName.toLowerCase()")
-                                    inputType = el.evaluate("el => el.getAttribute('type')")
+                                    tag = await el.evaluate("el => el.tagName.toLowerCase()")
+                                    inputType = await el.evaluate("el => el.getAttribute('type')")
                                     
                                     # Determine Interaction Type
                                     if tag in ['input', 'textarea'] and inputType not in ['button', 'submit', 'checkbox', 'radio']:
-                                        el.fill("test")
+                                        await el.fill("test")
                                         self.logs["mobile_logs"].append(f"Target #{i+1} ({tag}): Typable.")
                                         self._log_trace("keyboard", f"Typed 'test' into <{tag}> element")
                                     else:
-                                        el.tap(timeout=500)
+                                        await el.tap(timeout=500)
                                         self.logs["mobile_logs"].append(f"Target #{i+1} ({tag}): Tappable.")
                                         self._log_trace("point_up_2", f"Tapped <{tag}> element")
                                 except Exception as e:
@@ -189,9 +195,9 @@ class AdvancedAnalyzer:
                                     self._log_trace("warning", f"Failed to interact with Target #{i+1}")
                         
                         # 2. Landscape check
-                        page.set_viewport_size({"width": 844, "height": 390})
-                        page.wait_for_timeout(200)
-                        scroll_width = page.evaluate("document.body.scrollWidth")
+                        await page.set_viewport_size({"width": 844, "height": 390})
+                        await page.wait_for_timeout(200)
+                        scroll_width = await page.evaluate("document.body.scrollWidth")
                         if scroll_width > 844:
                             self.logs["mobile_logs"].append(f"LANDSCAPE FAIL: Horizontal scroll detected.")
                         else:
@@ -214,16 +220,16 @@ class AdvancedAnalyzer:
                     # Dimensions: 412x915
                     try:
                         self._log_trace("calling", "Resizing Viewport to Samsung/Android (412x915)...")
-                        page.set_viewport_size({'width': 412, 'height': 915})
-                        page.wait_for_timeout(200)
-                        vp = page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
+                        await page.set_viewport_size({'width': 412, 'height': 915})
+                        await page.wait_for_timeout(200)
+                        vp = await page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
                         self.logs["mobile_logs"].append(f"Android Viewport Verified: {vp['width']}x{vp['height']}")
                         
                         # Quick Tap Test for Android (Just checking first button to ensure no layout shift blocked it)
                         btn = page.locator("button, a, input[type='button'], input[type='submit']").first
-                        if btn.is_visible():
+                        if await btn.is_visible():
                             try:
-                                btn.tap(timeout=500)
+                                await btn.tap(timeout=500)
                                 self.logs["mobile_logs"].append(f"Android Target Check: Tappable.")
                             except:
                                  self.logs["mobile_logs"].append(f"Android Target Check: FAILED TAP (Layout Shift?).")
@@ -235,7 +241,7 @@ class AdvancedAnalyzer:
                     results["mobile"] = self._generate_mobile_summary()
 
                 finally:
-                    browser.close()
+                    await browser.close()
 
         except Exception as e:
             logger.error(f"Single-Pass Browser Session Failed: {e}", exc_info=True)
