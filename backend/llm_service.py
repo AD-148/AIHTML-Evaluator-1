@@ -354,7 +354,14 @@ async def _run_agent(client, system_prompt, messages, context_str="") -> Dict:
             ),
             timeout=30.0
         )
-        return json.loads(response.choices[0].message.content)
+        content = response.choices[0].message.content
+        # CLEANUP: Remove ```json and ``` if present
+        if content.strip().startswith("```"):
+            content = content.strip().split("\n", 1)[1] if "\n" in content else content
+            if content.strip().endswith("```"):
+                content = content.strip()[:-3]
+        
+        return json.loads(content)
     except Exception as e:
         logger.error(f"Agent Execution Failed for prompt '{system_prompt[:30]}...'. Error: {e}", exc_info=True)
         # Return error as rationale so it appears in UI

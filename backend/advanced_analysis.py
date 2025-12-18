@@ -70,123 +70,138 @@ class AdvancedAnalyzer:
         try:
             with sync_playwright() as p:
                 browser = p.chromium.launch()
-                # Create a context that mimics a decent desktop for initial Fidelity/Visual checks
-                context = browser.new_context(viewport={'width': 1280, 'height': 720}) 
-                page = context.new_page()
-                page.set_content(self.html_content)
-                
-                # --- PHASE A: AXE ACCESSIBILITY ---
                 try:
-                    axe_results = Axe().run(page)
-                    for violation in axe_results.get("violations", []):
-                        impact = violation.get("impact")
-                        help_text = violation.get("help")
-                        nodes = len(violation.get("nodes", []))
-                        msg = f"[{impact.upper()}] {help_text} ({nodes} occurrences)"
-                        if impact in ['critical', 'serious']:
-                            self.logs["critical"].append(msg)
-                            self.logs["score_cap"] = min(self.logs["score_cap"], 50 if impact == 'critical' else 70)
+                    # Create a context that mimics a decent desktop for initial Fidelity/Visual checks
+                    context = browser.new_context(viewport={'width': 1280, 'height': 720}) 
+                    page = context.new_page()
+                    # Capture Console Logs
+                    console_logs = []
+                    page.on("console", lambda msg: console_logs.append(f"CONSOLE [{msg.type}]: {msg.text}"))
+
+                    page.set_content(self.html_content)
+                    
+                    # --- PHASE A: AXE ACCESSIBILITY ---
+                    try:
+                        axe_results = Axe().run(page)
+                        for violation in axe_results.get("violations", []):
+                            impact = violation.get("impact")
+                            help_text = violation.get("help")
+                            nodes = len(violation.get("nodes", []))
+                            msg = f"[{impact.upper()}] {help_text} ({nodes} occurrences)"
+                            if impact in ['critical', 'serious']:
+                                self.logs["critical"].append(msg)
+                                self.logs["score_cap"] = min(self.logs["score_cap"], 50 if impact == 'critical' else 70)
+                            else:
+                                self.logs["warnings"].append(msg)
+                    except Exception as e:
+                        logger.error(f"Phase A (Axe) Failed: {e}")
+                        self.logs["warnings"].append(f"Axe Scan Failed: {e}")
+
+                    # --- PHASE B: FIDELITY UI INVENTORY ---
+                    inventory = {"components": {}, "styles": {}, "text_preview": ""}
+                    try:
+                        inventory["components"]["buttons"] = page.locator("button, input[type='button'], input[type='submit'], a[class*='btn']").count()
+                        inventory["components"]["inputs"] = page.locator("input:not([type='hidden'])").count()
+                        inventory["components"]["images"] = page.locator("img").count()
+                        text = page.inner_text("body")
+                        inventory["text_preview"] = re.sub(r'\s+', ' ', text).strip()[:300] + "..."
+                        
+                        btn = page.locator("button, input[type='submit'], a[class*='btn']").first
+                        if btn.is_visible():
+                            rgb = btn.evaluate("el => window.getComputedStyle(el).backgroundColor")
+                            color = btn.evaluate("el => window.getComputedStyle(el).color")
+                            inventory["styles"]["primary_button_bg"] = rgb
+                            inventory["styles"]["primary_button_text"] = color
+                    except Exception as e:
+                        logger.error(f"Phase B (Fidelity) Failed: {e}")
+                    results["fidelity"] = self._generate_fidelity_summary(inventory)
+
+                    # --- PHASE C: VISUAL STYLE DNA ---
+                    dna = {"font_family": "Unknown", "modern_css": []}
+                    try:
+                        dna["font_family"] = page.evaluate("window.getComputedStyle(document.body).fontFamily")
+                        features = page.evaluate("""() => {
+                            const el = document.querySelector('button') || document.querySelector('.card') || document.querySelector('div');
+                            const style = window.getComputedStyle(el || document.body);
+                            const features = [];
+                            if (style.boxShadow !== 'none') features.push('Shadows');
+                            if (parseInt(style.borderRadius) > 0) features.push('Rounded Corners');
+                            if (style.backgroundImage.includes('gradient')) features.push('Gradients');
+                            if (style.backdropFilter !== 'none') features.push('Glassmorphism');
+                            return features;
+                        }""")
+                        dna["modern_css"] = features
+                    except Exception as e:
+                        logger.error(f"Phase C (Visual) Failed: {e}")
+                    results["visual"] = self._generate_visual_summary(dna)
+
+                    # --- PHASE D: MOBILE SIMULATION (Resize Page) ---
+                    # 1. Portrait
+                    try:
+                        page.set_viewport_size({'width': 390, 'height': 844})
+                        page.wait_for_timeout(200)
+                        vp = page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
+                        self.logs["mobile_logs"].append(f"Viewport Verified: {vp['width']}x{vp['height']}")
+                        
+                        # Tap Test
+                        buttons = page.locator("button, a, input[type='button'], input[type='submit']")
+                        count = buttons.count()
+                        self.logs["mobile_logs"].append(f"Found {count} clickable targets.")
+                        for i in range(min(count, 5)): # Limit to 5 checks for speed
+                            btn = buttons.nth(i)
+                            if btn.is_visible():
+                                try:
+                                    btn.tap(timeout=500) # Short timeout
+                                except:
+                                    self.logs["mobile_logs"].append(f"Target #{i+1}: FAILED TAP.")
+                        
+                        # 2. Landscape check
+                        page.set_viewport_size({"width": 844, "height": 390})
+                        page.wait_for_timeout(200)
+                        scroll_width = page.evaluate("document.body.scrollWidth")
+                        if scroll_width > 844:
+                            self.logs["mobile_logs"].append(f"LANDSCAPE FAIL: Horizontal scroll detected.")
                         else:
-                            self.logs["warnings"].append(msg)
-                except Exception as e:
-                    logger.error(f"Phase A (Axe) Failed: {e}")
-                    self.logs["warnings"].append(f"Axe Scan Failed: {e}")
+                            self.logs["mobile_logs"].append("LANDSCAPE PASS: No horizontal scroll.")
+                            
+                    except Exception as e:
+                        logger.error(f"Phase D (Mobile iOS) Failed: {e}")
+                        self.logs["mobile_logs"].append(f"iOS Check Crash: {e}")
 
-                # --- PHASE B: FIDELITY UI INVENTORY ---
-                inventory = {"components": {}, "styles": {}, "text_preview": ""}
-                try:
-                    inventory["components"]["buttons"] = page.locator("button, input[type='button'], input[type='submit'], a[class*='btn']").count()
-                    inventory["components"]["inputs"] = page.locator("input:not([type='hidden'])").count()
-                    inventory["components"]["images"] = page.locator("img").count()
-                    text = page.inner_text("body")
-                    inventory["text_preview"] = re.sub(r'\s+', ' ', text).strip()[:300] + "..."
-                    
-                    btn = page.locator("button, input[type='submit'], a[class*='btn']").first
-                    if btn.is_visible():
-                        rgb = btn.evaluate("el => window.getComputedStyle(el).backgroundColor")
-                        color = btn.evaluate("el => window.getComputedStyle(el).color")
-                        inventory["styles"]["primary_button_bg"] = rgb
-                        inventory["styles"]["primary_button_text"] = color
-                except Exception as e:
-                    logger.error(f"Phase B (Fidelity) Failed: {e}")
-                results["fidelity"] = self._generate_fidelity_summary(inventory)
+                    # --- PHASE D1.5: RUNTIME ERROR CHECK ---
+                    errors = [log for log in console_logs if "error" in log.lower()]
+                    if errors:
+                        self.logs["mobile_logs"].append(f"Runtime Errors Detected: {len(errors)} found.")
+                        for err in errors[:3]:
+                            self.logs["mobile_logs"].append(f"- {err}")
+                    else:
+                        self.logs["mobile_logs"].append("No Runtime Console Errors detected.")
 
-                # --- PHASE C: VISUAL STYLE DNA ---
-                dna = {"font_family": "Unknown", "modern_css": []}
-                try:
-                    dna["font_family"] = page.evaluate("window.getComputedStyle(document.body).fontFamily")
-                    features = page.evaluate("""() => {
-                        const el = document.querySelector('button') || document.querySelector('.card') || document.querySelector('div');
-                        const style = window.getComputedStyle(el || document.body);
-                        const features = [];
-                        if (style.boxShadow !== 'none') features.push('Shadows');
-                        if (parseInt(style.borderRadius) > 0) features.push('Rounded Corners');
-                        if (style.backgroundImage.includes('gradient')) features.push('Gradients');
-                        if (style.backdropFilter !== 'none') features.push('Glassmorphism');
-                        return features;
-                    }""")
-                    dna["modern_css"] = features
-                except Exception as e:
-                    logger.error(f"Phase C (Visual) Failed: {e}")
-                results["visual"] = self._generate_visual_summary(dna)
-
-                # --- PHASE D: MOBILE SIMULATION (Resize Page) ---
-                # 1. Portrait
-                try:
-                    page.set_viewport_size({'width': 390, 'height': 844})
-                    page.wait_for_timeout(200)
-                    vp = page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
-                    self.logs["mobile_logs"].append(f"Viewport Verified: {vp['width']}x{vp['height']}")
-                    
-                    # Tap Test
-                    buttons = page.locator("button, a, input[type='button'], input[type='submit']")
-                    count = buttons.count()
-                    self.logs["mobile_logs"].append(f"Found {count} clickable targets.")
-                    for i in range(min(count, 5)): # Limit to 5 checks for speed
-                        btn = buttons.nth(i)
+                    # --- PHASE D2: ANDROID SIMULATION (Samsung Galaxy S20 / Pixel 5) ---
+                    # Dimensions: 412x915
+                    try:
+                        page.set_viewport_size({'width': 412, 'height': 915})
+                        page.wait_for_timeout(200)
+                        vp = page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
+                        self.logs["mobile_logs"].append(f"Android Viewport Verified: {vp['width']}x{vp['height']}")
+                        
+                        # Quick Tap Test for Android (Just checking first button to ensure no layout shift blocked it)
+                        btn = page.locator("button, a, input[type='button'], input[type='submit']").first
                         if btn.is_visible():
                             try:
-                                btn.tap(timeout=500) # Short timeout
+                                btn.tap(timeout=500)
+                                self.logs["mobile_logs"].append(f"Android Target Check: Tappable.")
                             except:
-                                self.logs["mobile_logs"].append(f"Target #{i+1}: FAILED TAP.")
+                                 self.logs["mobile_logs"].append(f"Android Target Check: FAILED TAP (Layout Shift?).")
+
+                    except Exception as e:
+                        logger.error(f"Phase D2 (Android) Failed: {e}")
+                        self.logs["mobile_logs"].append(f"Android Check Crash: {e}")
                     
-                    # 2. Landscape check
-                    page.set_viewport_size({"width": 844, "height": 390})
-                    page.wait_for_timeout(200)
-                    scroll_width = page.evaluate("document.body.scrollWidth")
-                    if scroll_width > 844:
-                        self.logs["mobile_logs"].append(f"LANDSCAPE FAIL: Horizontal scroll detected.")
-                    else:
-                        self.logs["mobile_logs"].append("LANDSCAPE PASS: No horizontal scroll.")
-                        
-                except Exception as e:
-                    logger.error(f"Phase D (Mobile iOS) Failed: {e}")
-                    self.logs["mobile_logs"].append(f"iOS Check Crash: {e}")
+                    results["mobile"] = self._generate_mobile_summary()
 
-                # --- PHASE D2: ANDROID SIMULATION (Samsung Galaxy S20 / Pixel 5) ---
-                # Dimensions: 412x915
-                try:
-                    page.set_viewport_size({'width': 412, 'height': 915})
-                    page.wait_for_timeout(200)
-                    vp = page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
-                    self.logs["mobile_logs"].append(f"Android Viewport Verified: {vp['width']}x{vp['height']}")
-                    
-                    # Quick Tap Test for Android (Just checking first button to ensure no layout shift blocked it)
-                    btn = page.locator("button, a, input[type='button'], input[type='submit']").first
-                    if btn.is_visible():
-                        try:
-                            btn.tap(timeout=500)
-                            self.logs["mobile_logs"].append(f"Android Target Check: Tappable.")
-                        except:
-                             self.logs["mobile_logs"].append(f"Android Target Check: FAILED TAP (Layout Shift?).")
-
-                except Exception as e:
-                    logger.error(f"Phase D2 (Android) Failed: {e}")
-                    self.logs["mobile_logs"].append(f"Android Check Crash: {e}")
-                
-                results["mobile"] = self._generate_mobile_summary()
-
-                browser.close()
+                finally:
+                    browser.close()
 
         except Exception as e:
             logger.error(f"Single-Pass Browser Session Failed: {e}", exc_info=True)
@@ -223,26 +238,7 @@ class AdvancedAnalyzer:
                      self.logs["critical"].append(f"Interactive element <{btn.name}> has no accessible name.")
                      self.logs["score_cap"] = min(self.logs["score_cap"], 60)
 
-    def _run_axe_checks(self):
-        """Runs Axe-core via Playwright."""
-        with sync_playwright() as p:
-            browser = p.chromium.launch()
-            page = browser.new_page()
-            page.set_content(self.html_content)
-            results = Axe().run(page)
-            browser.close()
-            
-            for violation in results.get("violations", []):
-                impact = violation.get("impact")
-                help_text = violation.get("help")
-                nodes = len(violation.get("nodes", []))
-                msg = f"[{impact.upper()}] {help_text} ({nodes} occurrences)"
-                
-                if impact in ['critical', 'serious']:
-                    self.logs["critical"].append(msg)
-                    self.logs["score_cap"] = min(self.logs["score_cap"], 50 if impact == 'critical' else 70)
-                else:
-                    self.logs["warnings"].append(msg)
+
 
     def _run_html5_validation(self):
         """Placeholder for HTML5 Validator (Requires external CLI usually)."""
@@ -264,50 +260,7 @@ class AdvancedAnalyzer:
             elif not href.startswith(('http', 'mailto', 'tel', '/')):
                  self.logs["warnings"].append(f"Suspicious Link: href='{href}' is likely invalid.")
 
-    def _run_mobile_simulation(self):
-        """Runs Playwright in Mobile Viewport to test clicks/inputs."""
-        with sync_playwright() as p:
-            # iPhone 12 Viewport
-            browser = p.chromium.launch()
-            context = browser.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True)
-            page = context.new_page()
-            
-            # Capture Console Logs
-            console_logs = []
-            page.on("console", lambda msg: console_logs.append(f"CONSOLE [{msg.type}]: {msg.text}"))
-            
-            page.set_content(self.html_content)
-            
-            # 1. Viewport Check
-            vp = page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
-            self.logs["mobile_logs"].append(f"Viewport Verified: {vp['width']}x{vp['height']}")
-            
-            # 2. Touch Target Test
-            buttons = page.locator("button, a, input[type='button'], input[type='submit']")
-            count = buttons.count()
-            self.logs["mobile_logs"].append(f"Found {count} clickable targets.")
-            
-            for i in range(count):
-                btn = buttons.nth(i)
-                if btn.is_visible():
-                    try:
-                        # Attempt tap
-                        btn.tap(timeout=1000)
-                        self.logs["mobile_logs"].append(f"Target #{i+1}: Tappable.")
-                    except Exception as e:
-                        self.logs["mobile_logs"].append(f"Target #{i+1}: FAILED TAP. (Error: Overlapping element or off-screen)")
-            
-            # 3. Check for Console Errors
-            errors = [log for log in console_logs if "error" in log.lower()]
-            if errors:
-                 self.logs["mobile_logs"].append(f"Runtime Errors Detected: {len(errors)} found.")
-                 for err in errors[:3]:
-                     self.logs["mobile_logs"].append(f"- {err}")
-            else:
-                 self.logs["mobile_logs"].append("No Runtime Console Errors detected.")
 
-            # 4. Landscape Check (New Request)
-            pass
 
 
     def _generate_access_summary(self) -> str:
@@ -345,7 +298,7 @@ class AdvancedAnalyzer:
         # Font Logic
         font = dna['font_family'].lower()
         if "times" in font or "serif" in font and "sans" not in font:
-            lines.append(f"**Typography**: Deteced Generic/Outdated Font ('{dna['font_family']}'). [NEGATIVE SIGNAL]")
+            lines.append(f"**Typography**: Detected Generic/Outdated Font ('{dna['font_family']}'). [NEGATIVE SIGNAL]")
         else:
              lines.append(f"**Typography**: Detected Sans-Serif/Modern Font ('{dna['font_family']}'). [POSITIVE SIGNAL]")
              
