@@ -4,3 +4,6 @@ pydantic
 python-dotenv
 openai
 beautifulsoup4
+
+axe-core-python
+playwright

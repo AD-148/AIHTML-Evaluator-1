@@ -9,15 +9,15 @@ from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# Optional imports with graceful degradation -> DISABLED FOR DEBUGGING
-# try:
-from axe_core_python.sync_playwright import Axe
-from playwright.sync_api import sync_playwright
-AXE_AVAILABLE = True
-print(f"DEBUG: AdvancedAnalyzer Imported. AXE_AVAILABLE={AXE_AVAILABLE}")
-# except ImportError:
-#     AXE_AVAILABLE = False
-#     logger.warning("Axe/Playwright not installed. Accessibility checks will be limited to BeautifulSoup.")
+# Optional imports with graceful degradation
+try:
+    from axe_core_python.sync_playwright import Axe
+    from playwright.sync_api import sync_playwright
+    AXE_AVAILABLE = True
+    print(f"DEBUG: AdvancedAnalyzer Imported. AXE_AVAILABLE={AXE_AVAILABLE}")
+except ImportError as e:
+    AXE_AVAILABLE = False
+    logger.warning(f"Axe/Playwright not installed or failed to import: {e}. Accessibility checks will be limited to BeautifulSoup.")
 
 try:
     import html5validator
