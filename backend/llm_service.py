@@ -136,7 +136,7 @@ INSTRUCTIONS:
    - If the log says "Runtime Errors Detected", deduct -15 pts.
    - If "LANDSCAPE FAIL" is present, deduct -10 pts.
 2. **Evaluate**:
-   - **Cross-Platform**: Check if design works on BOTH "Viewport Verified: 390x844" (iOS) and "Android Viewport" (412x915).
+   - **Cross-Platform**: Check if design works on "Viewport Verified: 390x844" (iOS).
    - **OS Compatibility**: `safe-area-inset`, `-webkit-` prefixes.
    - **Viewport**: Must have correct `<meta name="viewport">`.
    - **Orientation**: Check if design works in both Portrait and Landscape (via logs).

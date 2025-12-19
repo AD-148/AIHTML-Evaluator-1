@@ -461,32 +461,7 @@ class AdvancedAnalyzer:
                     else:
                         self.logs["mobile_logs"].append("No Runtime Console Errors detected.")
 
-                    # --- PHASE D2: ANDROID SIMULATION (Samsung Galaxy S20 / Pixel 5) ---
-                    # Dimensions: 412x915
-                    try:
-                        self._log_trace("calling", "Resizing Viewport to Samsung/Android (412x915)...")
-                        await page.set_viewport_size({'width': 412, 'height': 915})
-                        await page.wait_for_timeout(200)
-                        vp = await page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
-                        self.logs["mobile_logs"].append(f"Android Viewport Verified: {vp['width']}x{vp['height']}")
-                        self._log_trace(f"[PASS] Android Viewport: Verified size {vp['width']}x{vp['height']}.")
-                        
-                        # Quick Tap Test for Android
-                        btn = page.locator("button, a, input[type='button'], input[type='submit']").first
-                        if await btn.is_visible():
-                            try:
-                                await btn.tap(timeout=500)
-                                self.logs["mobile_logs"].append(f"Android Target Check: Tappable.")
-                                self._log_trace(f"[PASS] Android Interaction: Button is tappable.")
-                            except:
-                                 self.logs["mobile_logs"].append(f"Android Target Check: FAILED TAP (Layout Shift?).")
-                                 self._log_trace(f"[FAIL] Android Interaction: Button tap failed (Layout Shift?).")
-                        else:
-                             self._log_trace(f"[INFO] Android Interaction: No interactive elements found (Page likely navigated).")
 
-                    except Exception as e:
-                        logger.error(f"Phase D2 (Android) Failed: {e}")
-                        self.logs["mobile_logs"].append(f"Android Check Crash: {e}")
                     
                     results["mobile"] = self._generate_mobile_summary()
 
