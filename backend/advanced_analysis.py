@@ -130,6 +130,22 @@ class AdvancedAnalyzer:
                     page.on("console", lambda msg: console_logs.append(f"CONSOLE [{msg.type}]: {msg.text}"))
                     page.on("pageerror", self._handle_js_error)
 
+                    app_url = f"file://{os.path.abspath(self.temp_file)}"
+                    
+                    # INJECT MOCK SDK for "MoEngage" to prevent Runtime Errors on click
+                    await page.add_init_script("""
+                        window.moengage = {
+                            trackDismiss: () => console.log('Mock MoEngage: trackDismiss'),
+                            dismissMessage: () => console.log('Mock MoEngage: dismissMessage'),
+                            trackClick: () => console.log('Mock MoEngage: trackClick'),
+                            trackEvent: () => console.log('Mock MoEngage: trackEvent'),
+                            setUserAttribute: () => console.log('Mock MoEngage: setUserAttribute'),
+                            setFirstName: () => console.log('Mock MoEngage: setFirstName'),
+                            setEmailId: () => console.log('Mock MoEngage: setEmailId')
+                        };
+                    """)
+
+                    await page.goto(app_url)
                     await page.set_content(self.html_content)
 
                     # --- PHASE A: AXE ACCESSIBILITY (Manual Injection) ---
@@ -404,8 +420,18 @@ class AdvancedAnalyzer:
                                     url_before = page.url
                                     html_before = await page.content()
                                     
-                                    # Tap with INCREASED TIMEOUT (2000ms)
-                                    await el.tap(timeout=2000)
+                                    # Tap with INCREASED TIMEOUT (2000ms) and FALLBACK
+                                    try:
+                                        await el.tap(timeout=2000)
+                                    except Exception as tap_err:
+                                        # If tap times out (e.g. hidden input), try FORCE CLICK
+                                        if "Timeout" in str(tap_err) or "visible" in str(tap_err):
+                                             self._log_trace(f"[INFO] Mobile: Tap timed out on <{el_ident}>. Retrying with Force Click...")
+                                             await el.click(force=True, timeout=2000)
+                                             self.logs["mobile_logs"].append(f"Target #{i+1}: Retried with Force Click.")
+                                        else:
+                                             raise tap_err
+
                                     await page.wait_for_timeout(600) # Wait for JS/Animation
                                     
                                     # Capture State After
