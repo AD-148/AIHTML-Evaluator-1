@@ -195,10 +195,12 @@ class AdvancedAnalyzer:
                         vp = await page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
                         self.logs["mobile_logs"].append(f"Viewport Verified: {vp['width']}x{vp['height']}")
                         
-                        # Interactive Elements Test (Buttons, Links, Inputs)
-                        elements = page.locator("button, a, input, textarea, select")
+                        # Interactive Elements Test (Buttons, Links, Inputs, Custom Interactions)
+                        # Added: .scratchpad, canvas, [onclick], [role=button]
+                        elements = page.locator("button, a, input, textarea, select, [role='button'], [onclick], .scratchpad, .scratch-card, canvas")
                         count = await elements.count()
                         self.logs["mobile_logs"].append(f"Found {count} interactive targets.")
+                        self._log_trace("mag", f"[INFO] Mobile: Found {count} interactive elements to test.")
 
                         for i in range(count): # Iterate ALL interactive elements
                             el = elements.nth(i)
