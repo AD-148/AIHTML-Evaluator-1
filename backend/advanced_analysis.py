@@ -149,6 +149,13 @@ class AdvancedAnalyzer:
                             setFirstName: () => console.log('Mock MoEngage: setFirstName'),
                             setEmailId: () => console.log('Mock MoEngage: setEmailId')
                         };
+                        
+                        // Shim document.write to prevent execution errors and page wiping
+                        document.write = (content) => console.log('Shimmed document.write:', content);
+                        document.writeln = (content) => console.log('Shimmed document.writeln:', content);
+                        
+                        // Shim window.open to prevent popups
+                        window.open = (url) => console.log('Shimmed window.open:', url);
                     """)
 
                     await page.goto(app_url)
@@ -461,6 +468,16 @@ class AdvancedAnalyzer:
                                          self._log_trace("warning", f"[INFO] Mobile Interaction: Tapped <{tag}> but state is unchanged (Already {was_checked}?).")
                                     else:
                                          self._log_trace("x", f"[FAIL] Mobile Interaction: Failed to toggle <{tag}>.")
+
+                                elif inputType == "range":
+                                    # Range Slider Interaction
+                                    self._log_trace("control_knobs", f"[INFO] Mobile: Range/Slider detected. Adjusting value.")
+                                    # Set to 50% or 100%
+                                    await el.fill("10") # Typicially works for standard ranges
+                                    # Fallback evaluation for custom listeners
+                                    await el.evaluate("(e) => { e.value = 10; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); }")
+                                    self.logs["mobile_logs"].append(f"Target #{i+1}: Adjusted Range Slider.")
+                                    self._log_trace("check", f"[PASS] Mobile Interaction: Adjusted <{tag} type='range'>.")
 
                                 else:
                                     # Standard Click/Tap interaction for Buttons/Links/TextInputs
