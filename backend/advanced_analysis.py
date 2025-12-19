@@ -46,6 +46,21 @@ class AdvancedAnalyzer:
         """Appends a structured log entry for the UI trace."""
         self.logs["execution_trace"].append(f":{icon}: {message}")
 
+    def _handle_js_error(self, error):
+        """Handles JS errors with context and hints."""
+        msg = str(error)
+        hint = ""
+        if "moengage" in msg.lower():
+            hint = " [HINT: MoEngage SDK might be missing or blocked in the test environment.]"
+        elif "is not defined" in msg.lower():
+             hint = " [HINT: An external variable or library is missing.]"
+        
+        # Log to both critical logs (for summary) and trace (for chronological detail)
+        # Avoid duplicate "JS Error:" prefix if already in msg
+        clean_msg = msg.replace("JS Error:", "").strip()
+        self.logs["critical"].append(f"JS Error: {clean_msg}")
+        self._log_trace("boom", f"[CRITICAL] JS Error: {clean_msg}{hint}")
+
     async def analyze(self) -> Dict[str, str]:
         """
         SINGLE-PASS ANALYSIS: Launches Browser ONCE (Async), runs all checks sequentially.
@@ -95,7 +110,7 @@ class AdvancedAnalyzer:
                     # Capture Console Logs
                     console_logs = []
                     page.on("console", lambda msg: console_logs.append(f"CONSOLE [{msg.type}]: {msg.text}"))
-                    page.on("pageerror", lambda exc: self._log_trace("boom", f"[CRITICAL] JS Error: {exc}"))
+                    page.on("pageerror", self._handle_js_error)
 
                     await page.set_content(self.html_content)
 
@@ -207,11 +222,21 @@ class AdvancedAnalyzer:
                             if await el.is_visible():
                                 try:
                                     tag = await el.evaluate("el => el.tagName.toLowerCase()")
+                                    id_attr = await el.evaluate("el => el.id") or ""
+                                    class_attr = await el.evaluate("el => el.className") or ""
+                                    
+                                    # Create a descriptive identifier for the log
+                                    el_ident = tag
+                                    if id_attr:
+                                        el_ident += f" id='{id_attr}'"
+                                    elif class_attr:
+                                        el_ident += f" class='{class_attr.split()[0]}'" # Just first class for brevity
+
                                     text = await el.text_content()
                                     text = text.strip()[:20] if text else "logging-in"
                                     
                                     # Log Intent
-                                    self._log_trace("point_right", f"[INFO] Mobile: Approaching target #{i+1} (<{tag}> '{text}')...")
+                                    self._log_trace("point_right", f"[INFO] Mobile: Approaching target #{i+1} (<{el_ident}> '{text}')...")
                                     
                                     # Scroll info
                                     await el.scroll_into_view_if_needed()
