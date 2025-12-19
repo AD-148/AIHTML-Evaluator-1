@@ -5,6 +5,4 @@ python-dotenv
 openai
 beautifulsoup4
 html5validator
-axe-core-python
-linkchecker
 playwright

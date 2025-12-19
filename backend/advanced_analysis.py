@@ -216,12 +216,72 @@ class AdvancedAnalyzer:
                                     
                                     inputType = await el.evaluate("el => el.getAttribute('type')")
                                     
+                                    inputType = await el.evaluate("el => el.getAttribute('type')")
+                                    name_attr = await el.evaluate("el => el.getAttribute('name')") or ""
+                                    aria_label = await el.evaluate("el => el.getAttribute('aria-label')") or ""
+                                    cls_attr = await el.evaluate("el => el.getAttribute('class')") or ""
+                                    
+                                    # Normalize strings for heuristics
+                                    combined_desc = (text + " " + cls_attr + " " + aria_label + " " + name_attr).lower()
+
                                     # Determine Interaction Type
-                                    if tag in ['input', 'textarea'] and inputType not in ['button', 'submit', 'checkbox', 'radio']:
-                                        await el.fill("test")
-                                        self.logs["mobile_logs"].append(f"Target #{i+1} ({tag}): Typable.")
-                                        self._log_trace("keyboard", f"[PASS] Mobile: Typed 'test' into <{tag}>.")
+                                    if tag in ['input', 'textarea'] and inputType not in ['button', 'submit', 'checkbox', 'radio', 'range', 'color']:
+                                        # Smart Input Filling
+                                        fill_value = "test"
+                                        log_action = "Typed 'test'"
+                                        
+                                        if "email" in inputType or "email" in name_attr.lower():
+                                            fill_value = "test@example.com"
+                                            log_action = "Typed valid email"
+                                        elif "tel" in inputType or "phone" in name_attr.lower() or "mobile" in name_attr.lower():
+                                            fill_value = "9876543210"
+                                            log_action = "Typed phone number"
+                                        elif inputType == "number":
+                                            fill_value = "10"
+                                            log_action = "Typed number"
+                                        elif inputType == "date":
+                                            fill_value = "2025-01-01"
+                                            log_action = "Typed date"
+                                        elif inputType == "url":
+                                            fill_value = "https://example.com"
+                                            log_action = "Typed URL"
+                                        elif "search" in inputType:
+                                            fill_value = "test query"
+                                            log_action = "Typed search query"
+                                        
+                                        await el.fill(fill_value)
+                                        self.logs["mobile_logs"].append(f"Target #{i+1} ({tag}): {log_action} ('{fill_value}').")
+                                        self._log_trace("keyboard", f"[PASS] Mobile: {log_action} into <{tag} type='{inputType}'>.")
+                                    
+                                    elif "scratch" in combined_desc or "reveal" in combined_desc:
+                                        # Scratch Card Gesture Simulation
+                                        self._log_trace("point_up", f"[INFO] Mobile: Detected 'Scratch' intent on Target #{i+1}.")
+                                        box = await el.bounding_box()
+                                        if box:
+                                            center_x = box['x'] + box['width'] / 2
+                                            center_y = box['y'] + box['height'] / 2
+                                            # Simulate a zigzag scratch
+                                            await page.mouse.move(center_x - 20, center_y)
+                                            await page.mouse.down()
+                                            await page.mouse.move(center_x + 20, center_y, steps=5)
+                                            await page.mouse.move(center_x - 20, center_y + 20, steps=5)
+                                            await page.mouse.move(center_x + 20, center_y - 20, steps=5)
+                                            await page.mouse.up()
+                                            
+                                            self.logs["mobile_logs"].append(f"Target #{i+1}: Performed Scratch Gesture.")
+                                            self._log_trace("sparkles", f"[PASS] Mobile: Performed Scratch Gesture on <{tag}>.")
+                                        else:
+                                             self.logs["mobile_logs"].append(f"Target #{i+1}: Scratch failed (No Bounding Box).")
+
+                                    elif "spin" in combined_desc or "wheel" in combined_desc:
+                                        # Spin Wheel -> Tap with logging
+                                        self._log_trace("point_up", f"[INFO] Mobile: Detected 'Spin' intent on Target #{i+1}.")
+                                        await el.tap(timeout=2000)
+                                        self.logs["mobile_logs"].append(f"Target #{i+1}: Spun the Wheel.")
+                                        self._log_trace("dart", f"[PASS] Mobile: Tapped Scale/Spin/Wheel element.")
+                                    
                                     else:
+                                        # Standard Click/Tap interaction
                                         # Capture State Before
                                         url_before = page.url
                                         html_before = await page.content()
