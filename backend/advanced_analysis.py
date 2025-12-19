@@ -469,17 +469,20 @@ class AdvancedAnalyzer:
                         await page.wait_for_timeout(200)
                         vp = await page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
                         self.logs["mobile_logs"].append(f"Android Viewport Verified: {vp['width']}x{vp['height']}")
+                        self._log_trace(f"[PASS] Android Viewport: Verified size {vp['width']}x{vp['height']}.")
                         
-                        # Quick Tap Test for Android (Just checking first button to ensure no layout shift blocked it)
+                        # Quick Tap Test for Android
                         btn = page.locator("button, a, input[type='button'], input[type='submit']").first
                         if await btn.is_visible():
                             try:
                                 await btn.tap(timeout=500)
                                 self.logs["mobile_logs"].append(f"Android Target Check: Tappable.")
-                                self._log_trace("white_check_mark", "[PASS] Android Check: Button is tappable.")
+                                self._log_trace(f"[PASS] Android Interaction: Button is tappable.")
                             except:
                                  self.logs["mobile_logs"].append(f"Android Target Check: FAILED TAP (Layout Shift?).")
-                                 self._log_trace("x", "[FAIL] Android Check: Button tap failed (Layout Shift?).")
+                                 self._log_trace(f"[FAIL] Android Interaction: Button tap failed (Layout Shift?).")
+                        else:
+                             self._log_trace(f"[INFO] Android Interaction: No interactive elements found (Page likely navigated).")
 
                     except Exception as e:
                         logger.error(f"Phase D2 (Android) Failed: {e}")
