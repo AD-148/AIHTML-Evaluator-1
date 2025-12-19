@@ -150,9 +150,17 @@ class AdvancedAnalyzer:
                             setEmailId: () => console.log('Mock MoEngage: setEmailId')
                         };
                         
-                        // Shim document.write to prevent execution errors and page wiping
-                        document.write = (content) => console.log('Shimmed document.write:', content);
-                        document.writeln = (content) => console.log('Shimmed document.writeln:', content);
+                        // Shim document.write using Object.defineProperty to be extra aggressive
+                        Object.defineProperty(document, 'write', {
+                            value: (content) => console.log('Shimmed document.write:', content),
+                            writable: false,
+                            configurable: false
+                        });
+                        Object.defineProperty(document, 'writeln', {
+                            value: (content) => console.log('Shimmed document.writeln:', content),
+                            writable: false,
+                            configurable: false
+                        });
                         
                         // Shim window.open to prevent popups
                         window.open = (url) => console.log('Shimmed window.open:', url);
@@ -263,7 +271,9 @@ class AdvancedAnalyzer:
                         
                         # Interactive Elements Test (Buttons, Links, Inputs, Custom Interactions)
                         # Specific: img/div with onclick, role=button, scratch classes, canvas
-                        elements = page.locator("button, a, input, textarea, select, [role='button'], img[onclick], div[onclick], .scratchpad, .scratch-card, canvas")
+                        # Interactive Elements Test (Buttons, Links, Inputs, Custom Interactions)
+                        # Specific: img/div with onclick, role=button, scratch classes, canvas, role=slider
+                        elements = page.locator("button, a, input, textarea, select, [role='button'], [role='slider'], img[onclick], div[onclick], .scratchpad, .scratch-card, canvas")
                         count = await elements.count()
                         self.logs["mobile_logs"].append(f"Found {count} interactive targets.")
                         self._log_trace("mag", f"[INFO] Mobile: Found {count} interactive elements to test.")
@@ -469,15 +479,31 @@ class AdvancedAnalyzer:
                                     else:
                                          self._log_trace("x", f"[FAIL] Mobile Interaction: Failed to toggle <{tag}>.")
 
-                                elif inputType == "range":
-                                    # Range Slider Interaction
-                                    self._log_trace("control_knobs", f"[INFO] Mobile: Range/Slider detected. Adjusting value.")
-                                    # Set to 50% or 100%
-                                    await el.fill("10") # Typicially works for standard ranges
-                                    # Fallback evaluation for custom listeners
-                                    await el.evaluate("(e) => { e.value = 10; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); }")
-                                    self.logs["mobile_logs"].append(f"Target #{i+1}: Adjusted Range Slider.")
                                     self._log_trace("check", f"[PASS] Mobile Interaction: Adjusted <{tag} type='range'>.")
+
+                                elif inputType == "range" or (await el.get_attribute("role")) == "slider":
+                                    # Range Slider Interaction (Input or Custom Div)
+                                    self._log_trace("control_knobs", f"[INFO] Mobile: Slider detected. Adjusting value.")
+                                    
+                                    # Try standard fill first (works for inputs)
+                                    try:
+                                        await el.fill("10")
+                                    except:
+                                        pass
+                                        
+                                    # Fallback evaluation for custom listeners (both input and div based sliders often use these events)
+                                    await el.evaluate("(e) => { e.value = 10; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); }")
+                                    
+                                    # Some custom sliders (e.g. noUiSlider) need click simulation at a specific offset
+                                    try:
+                                        box = await el.bounding_box()
+                                        if box:
+                                            await page.mouse.click(box["x"] + box["width"] * 0.5, box["y"] + box["height"] * 0.5)
+                                    except:
+                                        pass
+
+                                    self.logs["mobile_logs"].append(f"Target #{i+1}: Adjusted Slider.")
+                                    self._log_trace("check", f"[PASS] Mobile Interaction: Adjusted Slider <{tag}>.")
 
                                 else:
                                     # Standard Click/Tap interaction for Buttons/Links/TextInputs
