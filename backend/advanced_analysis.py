@@ -42,10 +42,18 @@ class AdvancedAnalyzer:
         }
         self._log_trace("rocket", "Initialized AdvancedAnalyzer Engine. [ASYNC MODE]")
 
-    def _log_trace(self, icon: str, message: str):
-        """Appends a structured log entry for the UI trace. Icon is preserved for compatibility but not displayed."""
-        # User requested NO ICONS and better readability.
-        # We will format this as a clean list item.
+    def _log_trace(self, arg1, arg2=None):
+        """
+        Appends a structured log entry. 
+        Supports both new signature (message) and old signature (icon, message).
+        - New: _log_trace("Message")
+        - Old: _log_trace("icon", "Message") -> Icon is ignored.
+        """
+        if arg2 is None:
+            message = arg1
+        else:
+            message = arg2
+            
         self.logs["execution_trace"].append(f"- {message}")
 
     def _log_section(self, title: str):
