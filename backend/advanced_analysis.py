@@ -43,8 +43,14 @@ class AdvancedAnalyzer:
         self._log_trace("rocket", "Initialized AdvancedAnalyzer Engine. [ASYNC MODE]")
 
     def _log_trace(self, icon: str, message: str):
-        """Appends a structured log entry for the UI trace."""
-        self.logs["execution_trace"].append(f":{icon}: {message}")
+        """Appends a structured log entry for the UI trace. Icon is preserved for compatibility but not displayed."""
+        # User requested NO ICONS and better readability.
+        # We will format this as a clean list item.
+        self.logs["execution_trace"].append(f"- {message}")
+
+    def _log_section(self, title: str):
+        """Appends a section header to the log."""
+        self.logs["execution_trace"].append(f"\n### {title}")
 
     def _handle_js_error(self, error):
         """Handles JS errors with context and hints."""
@@ -58,24 +64,28 @@ class AdvancedAnalyzer:
         # Log to both critical logs (for summary) and trace (for chronological detail)
         # Avoid duplicate "JS Error:" prefix if already in msg
         clean_msg = msg.replace("JS Error:", "").strip()
+        # Log to both critical logs (for summary) and trace (for chronological detail)
+        # Avoid duplicate "JS Error:" prefix if already in msg
+        clean_msg = msg.replace("JS Error:", "").strip()
         self.logs["critical"].append(f"JS Error: {clean_msg}")
-        self._log_trace("boom", f"[CRITICAL] JS Error: {clean_msg}{hint}")
+        self._log_trace("boom", f"[FAIL] JS Runtime Error: {clean_msg}{hint}")
 
     async def analyze(self) -> Dict[str, str]:
         """
         SINGLE-PASS ANALYSIS: Launches Browser ONCE (Async), runs all checks sequentially.
         Returns dictionary of all context summaries.
         """
-        self._log_trace("mag_right", f"Starting Static Code Analysis. PLAYWRIGHT_AVAILABLE={PLAYWRIGHT_AVAILABLE}")
+        self._log_section("1. STATIC CODE ANALYSIS")
+        self._log_trace("mag_right", f"Starting Static Analysis (Playwright Available: {PLAYWRIGHT_AVAILABLE})")
+        
         # 1. Structural Checks (No Browser)
         self._run_bs4_checks()
-        self._log_trace("mag", "BS4 Checks Complete.")
         self._check_links()
-        self._log_trace("link", "Link Checks Complete.")
+        
         if HTML5_AVAILABLE:
             try:
                 self._run_html5_validation()
-                self._log_trace("clipboard", "HTML5 Validation Complete.")
+                self._log_trace("clipboard", "HTML5 Syntax Validation Complete.")
             except Exception as e:
                 logger.error(f"HTML5 Validator Execution Failed. Error: {e}", exc_info=True)
 
@@ -115,7 +125,8 @@ class AdvancedAnalyzer:
                     await page.set_content(self.html_content)
 
                     # --- PHASE A: AXE ACCESSIBILITY (Manual Injection) ---
-                    self._log_trace("wheelchair", "Starting Axe-Core Accessibility Audit...")
+                    self._log_section("2. ACCESSIBILITY AUDIT (Axe-Core)")
+                    self._log_trace("wheelchair", "Injecting Axe-Core engine...")
                     try:
                         # Inject Axe Core
                         await page.add_script_tag(url=AXE_SCRIPT_URL)
@@ -134,10 +145,10 @@ class AdvancedAnalyzer:
                                 self.logs["warnings"].append(msg)
                         
                         if not axe_results.get("violations"):
-                            self._log_trace("white_check_mark", "[PASS] Axe Accessibility: No violations found.")
+                            self._log_trace("white_check_mark", "[PASS] Accessibility Audit: No violations found.")
                         else:
                             count = len(axe_results.get("violations"))
-                            self._log_trace("x", f"[FAIL] Axe Accessibility: Found {count} rule violations.")
+                            self._log_trace("x", f"[FAIL] Accessibility Audit: Found {count} rule violations.")
                             
                             # Detailed Reporting for Axe
                             for v in axe_results.get("violations", []):
@@ -155,7 +166,8 @@ class AdvancedAnalyzer:
                         self.logs["warnings"].append(f"Axe Scan Failed (Possible Network/Script Error): {e}")
 
                     # --- PHASE B: FIDELITY UI INVENTORY ---
-                    self._log_trace("clipboard", "Scanning UI Inventory (Buttons, Inputs, Images)...")
+                    self._log_section("3. UI INVENTORY & VISUALS")
+                    self._log_trace("clipboard", "Scanning UI components (Buttons, Inputs, Images)...")
                     inventory = {"components": {}, "styles": {}, "text_preview": ""}
                     try:
                         inventory["components"]["buttons"] = await page.locator("button, input[type='button'], input[type='submit'], a[class*='btn']").count()
@@ -175,7 +187,7 @@ class AdvancedAnalyzer:
                     results["fidelity"] = self._generate_fidelity_summary(inventory)
 
                     # --- PHASE C: VISUAL STYLE DNA ---
-                    self._log_trace("art", "Extracting Visual Style DNA (Fonts, Tokens)...")
+                    # Merged into Section 3
                     dna = {"font_family": "Unknown", "modern_css": []}
                     try:
                         dna["font_family"] = await page.evaluate("window.getComputedStyle(document.body).fontFamily")
@@ -203,6 +215,7 @@ class AdvancedAnalyzer:
 
                     # --- PHASE D: MOBILE SIMULATION (Resize Page) ---
                     # 1. Portrait
+                    self._log_section("4. MOBILE SIMULATION & INTERACTION")
                     try:
                         self._log_trace("iphone", "Resizing Viewport to iPhone 12 (390x844)...")
                         await page.set_viewport_size({'width': 390, 'height': 844})
@@ -238,13 +251,12 @@ class AdvancedAnalyzer:
                                     text = await el.text_content()
                                     text = text.strip()[:20] if text else "logging-in"
                                     
-                                    # Log Intent
-                                    self._log_trace("point_right", f"[INFO] Mobile: Approaching target #{i+1} (<{el_ident}> '{text}')...")
+                                    # Log Intent - REMOVED to avoid duplicate with Execution Phase
+                                    # self._log_trace("point_right", f"[INFO] Mobile: Approaching target #{i+1} (<{el_ident}> '{text}')...")
                                     
                                     # Scroll info
-                                    await el.scroll_into_view_if_needed()
-                                    
-                                    inputType = await el.evaluate("el => el.getAttribute('type')")
+                                    # await el.scroll_into_view_if_needed() 
+                                    # Move scroll to execution phase to avoid interacting/moving things during inspection
                                     
                                     inputType = await el.evaluate("el => el.getAttribute('type')")
                                     name_attr = await el.evaluate("el => el.getAttribute('name')") or ""
@@ -281,6 +293,11 @@ class AdvancedAnalyzer:
 
                                 except Exception as e:
                                     logger.warning(f"Error inspecting element #{i}: {e}")
+                            else:
+                                 # Element not visible during inspection
+                                 pass 
+
+                        self._log_trace("mag", f"[INFO] Mobile: Plan -> {len(primary_actions)} Primary, {len(deferred_actions)} Deferred (Close).")
 
                         # PHASE D.2: EXECUTE ACTIONS: Primary First, then Deferred (Closing)
                         all_actions = primary_actions + deferred_actions
@@ -388,19 +405,19 @@ class AdvancedAnalyzer:
                                     
                                     # Verify State Change
                                     if url_before != url_after:
-                                         self._log_trace("rocket", f"[PASS] Mobile: Tapped <{el_ident}> and navigated to {url_after}.")
+                                         self._log_trace(f"[PASS] Mobile Navigation: Tapped <{el_ident}> -> Moved to {url_after}.")
                                          self.logs["mobile_logs"].append(f"Target #{i+1}: Triggered Navigation.")
                                     elif html_before != html_after:
-                                         self._log_trace("white_check_mark", f"[PASS] Mobile: Tapped <{el_ident}> and triggered UI update.")
+                                         self._log_trace(f"[PASS] Mobile Interaction: Tapped <{el_ident}> -> UI Updated.")
                                          self.logs["mobile_logs"].append(f"Target #{i+1}: Triggered Visual Update.")
                                     else:
                                          # No change detected -> Likely broken listener
-                                         self._log_trace("x", f"[FAIL] Mobile: Tapped <{el_ident}> but page state did not change (Unresponsive).")
+                                         self._log_trace(f"[FAIL] Mobile Interaction: Tapped <{el_ident}> -> No response (DOM/URL unchanged).")
                                          self.logs["mobile_logs"].append(f"Target #{i+1}: Unresponsive (No DOM/URL change).")
                                          
                             except Exception as e:
                                 self.logs["mobile_logs"].append(f"Target #{i+1}: FAILED INTERACTION. Error: {e}")
-                                self._log_trace("x", f"[FAIL] Mobile: Failed to tap target #{i+1}. Error: {e}")
+                                self._log_trace(f"[FAIL] Mobile Interaction: Error tapping target #{i+1}. Reason: {e}")
                         
                         # 2. Landscape check
                         await page.set_viewport_size({"width": 844, "height": 390})
@@ -547,14 +564,14 @@ class AdvancedAnalyzer:
                 target_id = href[1:]
                 if target_id and not self.soup.find(id=target_id):
                     self.logs["warnings"].append(f"Broken Internal Link: href='{href_log}' points to non-existent ID.")
-                    self._log_trace("x", f"[FAIL] Link: Broken internal anchor ({href_log}).")
+                    self._log_trace(f"[FAIL] Link Integrity: Broken internal anchor ({href_log}) -> ID not found.")
                 else:
-                     if i < 5: self._log_trace("white_check_mark", f"[PASS] Link: Valid internal anchor ({href_log}).")
+                     if i < 5: self._log_trace(f"[PASS] Link Integrity: Valid internal anchor ({href_log}).")
             elif not href.startswith(('http', 'mailto', 'tel', '/')):
                  self.logs["warnings"].append(f"Suspicious Link: href='{href_log}' is likely invalid.")
-                 self._log_trace("x", f"[FAIL] Link: Invalid href format ({href_log}).")
+                 self._log_trace(f"[FAIL] Link Integrity: Suspicious href format ({href_log}).")
             else:
-                 if i < 5: self._log_trace("white_check_mark", f"[PASS] Link: Valid href format ({href_log}).")
+                 if i < 5: self._log_trace(f"[PASS] Link Integrity: Valid href format ({href_log}).")
 
 
 
@@ -596,7 +613,7 @@ class AdvancedAnalyzer:
         if "times" in font or "serif" in font and "sans" not in font:
             lines.append(f"**Typography**: Detected Generic/Outdated Font ('{dna['font_family']}'). [NEGATIVE SIGNAL]")
         else:
-             lines.append(f"**Typography**: Detected Sans-Serif/Modern Font ('{dna['font_family']}'). [POSITIVE SIGNAL]")
+            lines.append(f"**Typography**: Detected Sans-Serif/Modern Font ('{dna['font_family']}'). [POSITIVE SIGNAL]")
              
         # Modern CSS Logic
         if dna['modern_css']:
