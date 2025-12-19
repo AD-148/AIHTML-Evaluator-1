@@ -4,7 +4,7 @@ import './index.css';
 
 const App = () => {
   // --- STATE ---
-  const [activeTab, setActiveTab] = useState('analysis'); // 'analysis', 'chat', 'preview'
+  const [activeTab, setActiveTab] = useState('logs'); // 'logs', 'analysis', 'chat', 'preview'
   const [htmlInput, setHtmlInput] = useState(`<div class="card">\n  <h2>Hello World</h2>\n  <button>Click Me</button>\n</div>`);
   const [chatHistory, setChatHistory] = useState([]); // [{ role: 'user'|'assistant'|'system', content: ... }]
   const [latestAnalysis, setLatestAnalysis] = useState(null);
@@ -84,7 +84,7 @@ const App = () => {
 
     setLoading(true);
     setLatestAnalysis(null);
-    setActiveTab('analysis');
+    setActiveTab('logs');
     setShowJson(false);
 
     // Provide context directly in the first message
@@ -197,6 +197,12 @@ const App = () => {
           {/* TABS HEADER */}
           <div className="tabs-header">
             <button
+              className={`tab-btn ${activeTab === 'logs' ? 'active' : ''}`}
+              onClick={() => setActiveTab('logs')}
+            >
+              <i className="fa-solid fa-terminal"></i> Test Log
+            </button>
+            <button
               className={`tab-btn ${activeTab === 'analysis' ? 'active' : ''}`}
               onClick={() => setActiveTab('analysis')}
             >
@@ -213,12 +219,6 @@ const App = () => {
               onClick={() => setActiveTab('preview')}
             >
               <i className="fa-solid fa-eye"></i> Preview
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'logs' ? 'active' : ''}`}
-              onClick={() => setActiveTab('logs')}
-            >
-              <i className="fa-solid fa-terminal"></i> Test Log
             </button>
           </div>
 

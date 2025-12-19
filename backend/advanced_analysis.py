@@ -99,7 +99,6 @@ class AdvancedAnalyzer:
 
                     await page.set_content(self.html_content)
 
-                    
                     # --- PHASE A: AXE ACCESSIBILITY (Manual Injection) ---
                     self._log_trace("wheelchair", "Starting Axe-Core Accessibility Audit...")
                     try:
@@ -124,6 +123,18 @@ class AdvancedAnalyzer:
                         else:
                             count = len(axe_results.get("violations"))
                             self._log_trace("x", f"[FAIL] Axe Accessibility: Found {count} rule violations.")
+                            
+                            # Detailed Reporting for Axe
+                            for v in axe_results.get("violations", []):
+                                help_text = v.get("help")
+                                self.logs["warnings"].append(f"[AXE] {help_text}")
+                                for node in v.get("nodes", []):
+                                    html_snip = node.get("html", "")
+                                    # Truncate to 40 chars
+                                    if len(html_snip) > 40:
+                                        html_snip = html_snip[:37] + "..."
+                                    target = (node.get("target") or ["unknown"])[0]
+                                    self.logs["warnings"].append(f"  - Failed on: {html_snip} ({target})")
                     except Exception as e:
                         logger.error(f"Phase A (Axe) Failed: {e}")
                         self.logs["warnings"].append(f"Axe Scan Failed (Possible Network/Script Error): {e}")
@@ -189,7 +200,7 @@ class AdvancedAnalyzer:
                         count = await elements.count()
                         self.logs["mobile_logs"].append(f"Found {count} interactive targets.")
 
-                        for i in range(min(count, 5)): # Limit to 5 checks for speed
+                        for i in range(count): # Iterate ALL interactive elements
                             el = elements.nth(i)
                             if await el.is_visible():
                                 try:
@@ -215,8 +226,8 @@ class AdvancedAnalyzer:
                                         url_before = page.url
                                         html_before = await page.content()
                                         
-                                        # Tap
-                                        await el.tap(timeout=1000)
+                                        # Tap with INCREASED TIMEOUT (2000ms)
+                                        await el.tap(timeout=2000)
                                         await page.wait_for_timeout(600) # Wait for JS/Animation
                                         
                                         # Capture State After
@@ -313,15 +324,19 @@ class AdvancedAnalyzer:
         self.logs["stats"]["interactive_elements"] = len(buttons)
 
         # Critical: Missing Alt
+        # Critical: Missing Alt
         for i, img in enumerate(imgs):
-            if i < 5: # Log first 5 only to avoid spam
-                src = img.get('src', 'unknown')
-                if not img.get('alt') and img.get('role') != 'presentation':
-                    self.logs["critical"].append(f"Image <img src='{src}'> is missing 'alt' text.")
-                    self._log_trace("x", f"[FAIL] Image #{i+1}: Missing 'alt' text (src='{src[:20]}...').")
-                    self.logs["score_cap"] = min(self.logs["score_cap"], 60)
-                else:
-                    self._log_trace("white_check_mark", f"[PASS] Image #{i+1}: Has valid 'alt' text.")
+            src = img.get('src', 'unknown')
+            # Truncate src for log
+            src_log = src[:37] + "..." if len(src) > 40 else src
+            
+            if not img.get('alt') and img.get('role') != 'presentation':
+                self.logs["critical"].append(f"Image src='{src_log}' is missing 'alt' text.")
+                self._log_trace("x", f"[FAIL] Image: Missing 'alt' (src='{src_log}').")
+                self.logs["score_cap"] = min(self.logs["score_cap"], 60)
+            else:
+                if i < 5: # Keep noise low for passing items
+                    self._log_trace("white_check_mark", f"[PASS] Image: Has valid 'alt' (src='{src_log}').")
 
         # Critical: Broken Interactive Config
         for i, btn in enumerate(buttons):
@@ -341,10 +356,21 @@ class AdvancedAnalyzer:
 
                 if not is_accessible:
                      self.logs["critical"].append(f"Interactive element <{btn.name}> has no accessible name.")
-                     if i < 5: self._log_trace("x", f"[FAIL] Button #{i+1} (<{btn.name}>): No accessible name (text/aria-label).")
+                     
+                     btn_html = str(btn)[:40] + "..." if len(str(btn)) > 40 else str(btn)
+                     self._log_trace("x", f"[FAIL] Button ({btn_html}): No accessible name (text/aria-label).")
                      self.logs["score_cap"] = min(self.logs["score_cap"], 60)
-                elif i < 5:
-                     self._log_trace("white_check_mark", f"[PASS] Button #{i+1} (<{btn.name}>): Has accessible name.")
+                else:
+                     # Log PASS for every button might be too verbose if there are many, but requested "add all cases" implies detail.
+                     # However, usually we care about failures. Let's log pass only for the first few to show coverage, 
+                     # OR for all if we want total complete noise. 
+                     # Requirement: "If it is failing, add all the cases for which it is failing." 
+                     # So for PASS, we can keep it light or just count them. 
+                     # I will log PASS for the first 5 to avoid spamming the trace, but log ALL failures.
+                     pass 
+                     # (Actually, let's keep the existing logic for PASS but remove limit for FAIL)
+                     if i < 5:
+                          self._log_trace("white_check_mark", f"[PASS] Button #{i+1} (<{btn.name}>): Has accessible name.")
 
 
 
@@ -359,21 +385,24 @@ class AdvancedAnalyzer:
         """Basic Link Checker logic."""
         links = self.soup.find_all('a', href=True)
         for i, link in enumerate(links):
-            if i >= 5: break # Limit logs
+            # remove limit
             href = link['href']
+            # Truncate href for log
+            href_log = href[:37] + "..." if len(href) > 40 else href
+            
             if href.startswith('#'):
                 # Internal anchor check
                 target_id = href[1:]
                 if target_id and not self.soup.find(id=target_id):
-                    self.logs["warnings"].append(f"Broken Internal Link: href='{href}' points to non-existent ID.")
-                    self._log_trace("x", f"[FAIL] Link #{i+1}: Broken internal anchor ({href}).")
+                    self.logs["warnings"].append(f"Broken Internal Link: href='{href_log}' points to non-existent ID.")
+                    self._log_trace("x", f"[FAIL] Link: Broken internal anchor ({href_log}).")
                 else:
-                    self._log_trace("white_check_mark", f"[PASS] Link #{i+1}: Valid internal anchor ({href}).")
+                     if i < 5: self._log_trace("white_check_mark", f"[PASS] Link: Valid internal anchor ({href_log}).")
             elif not href.startswith(('http', 'mailto', 'tel', '/')):
-                 self.logs["warnings"].append(f"Suspicious Link: href='{href}' is likely invalid.")
-                 self._log_trace("x", f"[FAIL] Link #{i+1}: Invalid href format ({href}).")
+                 self.logs["warnings"].append(f"Suspicious Link: href='{href_log}' is likely invalid.")
+                 self._log_trace("x", f"[FAIL] Link: Invalid href format ({href_log}).")
             else:
-                 self._log_trace("white_check_mark", f"[PASS] Link #{i+1}: Valid href format ({href}).")
+                 if i < 5: self._log_trace("white_check_mark", f"[PASS] Link: Valid href format ({href_log}).")
 
 
 
