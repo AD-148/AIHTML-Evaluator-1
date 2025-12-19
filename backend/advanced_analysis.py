@@ -130,7 +130,13 @@ class AdvancedAnalyzer:
                     page.on("console", lambda msg: console_logs.append(f"CONSOLE [{msg.type}]: {msg.text}"))
                     page.on("pageerror", self._handle_js_error)
 
-                    app_url = f"file://{os.path.abspath(self.temp_file)}"
+                    # Create serialized temp file for the browser to load
+                    # This is necessary because data: URLs or set_content can sometimes behave differently with origin policies
+                    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.html', encoding='utf-8') as f:
+                        f.write(self.html_content)
+                        temp_file_path = f.name
+                    
+                    app_url = f"file://{temp_file_path}"
                     
                     # INJECT MOCK SDK for "MoEngage" to prevent Runtime Errors on click
                     await page.add_init_script("""
@@ -493,6 +499,9 @@ class AdvancedAnalyzer:
 
                 finally:
                     await browser.close()
+                    # Clean up temp file
+                    if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
+                        os.remove(temp_file_path)
 
         except Exception as e:
             logger.error(f"Single-Pass Browser Session Failed: {e}", exc_info=True)
