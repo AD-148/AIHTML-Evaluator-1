@@ -196,8 +196,8 @@ class AdvancedAnalyzer:
                         self.logs["mobile_logs"].append(f"Viewport Verified: {vp['width']}x{vp['height']}")
                         
                         # Interactive Elements Test (Buttons, Links, Inputs, Custom Interactions)
-                        # Added: .scratchpad, canvas, [onclick], [role=button]
-                        elements = page.locator("button, a, input, textarea, select, [role='button'], [onclick], .scratchpad, .scratch-card, canvas")
+                        # Specific: img/div with onclick, role=button, scratch classes, canvas
+                        elements = page.locator("button, a, input, textarea, select, [role='button'], img[onclick], div[onclick], .scratchpad, .scratch-card, canvas")
                         count = await elements.count()
                         self.logs["mobile_logs"].append(f"Found {count} interactive targets.")
                         self._log_trace("mag", f"[INFO] Mobile: Found {count} interactive elements to test.")
@@ -255,23 +255,33 @@ class AdvancedAnalyzer:
                                         self.logs["mobile_logs"].append(f"Target #{i+1} ({tag}): {log_action} ('{fill_value}').")
                                         self._log_trace("keyboard", f"[PASS] Mobile: {log_action} into <{tag} type='{inputType}'>.")
                                     
-                                    elif "scratch" in combined_desc or "reveal" in combined_desc:
+                                    elif "scratch" in combined_desc or "reveal" in combined_desc or "scratchpad" in cls_attr.lower():
                                         # Scratch Card Gesture Simulation
                                         self._log_trace("point_up", f"[INFO] Mobile: Detected 'Scratch' intent on Target #{i+1}.")
                                         box = await el.bounding_box()
                                         if box:
                                             center_x = box['x'] + box['width'] / 2
                                             center_y = box['y'] + box['height'] / 2
-                                            # Simulate a zigzag scratch
-                                            await page.mouse.move(center_x - 20, center_y)
-                                            await page.mouse.down()
-                                            await page.mouse.move(center_x + 20, center_y, steps=5)
-                                            await page.mouse.move(center_x - 20, center_y + 20, steps=5)
-                                            await page.mouse.move(center_x + 20, center_y - 20, steps=5)
-                                            await page.mouse.up()
+                                            width = box['width']
+                                            height = box['height']
                                             
-                                            self.logs["mobile_logs"].append(f"Target #{i+1}: Performed Scratch Gesture.")
-                                            self._log_trace("sparkles", f"[PASS] Mobile: Performed Scratch Gesture on <{tag}>.")
+                                            # Simulate a vigorous scratch (Zig-Zag across the area)
+                                            await page.mouse.move(center_x, center_y)
+                                            await page.mouse.down()
+                                            
+                                            # Scratch multiple times to ensure coverage
+                                            for s in range(10):
+                                                offset_x = (width * 0.4) if s % 2 == 0 else -(width * 0.4)
+                                                offset_y = (height * 0.4) * (s / 10.0) - (height * 0.2)
+                                                await page.mouse.move(center_x + offset_x, center_y + offset_y, steps=5)
+                                            
+                                            await page.mouse.up()
+                                            self.logs["mobile_logs"].append(f"Target #{i+1}: Performed Robust Scratch Gesture.")
+                                            
+                                            # Wait for UI update (winning screen)
+                                            await page.wait_for_timeout(3000) 
+                                            
+                                            self._log_trace("sparkles", f"[PASS] Mobile: Performed Scratch Gesture on <{tag}> and waited for result.")
                                         else:
                                              self.logs["mobile_logs"].append(f"Target #{i+1}: Scratch failed (No Bounding Box).")
 
