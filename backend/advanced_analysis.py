@@ -420,8 +420,50 @@ class AdvancedAnalyzer:
                                     self.logs["mobile_logs"].append(f"Target #{i+1}: Spun the Wheel.")
                                     self._log_trace("dart", f"[PASS] Mobile: Tapped Scale/Spin/Wheel element.")
                                 
+                                    self._log_trace("dart", f"[PASS] Mobile: Tapped Scale/Spin/Wheel element.")
+                                
+                                elif inputType in ["radio", "checkbox"]:
+                                    # Specialized Handling for Radio/Checkbox (often hidden in frameworks like Bootstrap)
+                                    self._log_trace("ballot_box_with_check", f"[INFO] Mobile: Checkbox/Radio detected ({inputType}). Attempting robust interaction.")
+                                    
+                                    # 1. Try to toggle via LABEL (Most reliable for hidden inputs)
+                                    el_id = await el.get_attribute("id")
+                                    label = None
+                                    if el_id:
+                                        label = page.locator(f"label[for='{el_id}']")
+                                    
+                                    # Check state using JS property (more reliable than attribute)
+                                    was_checked = await el.is_checked()
+                                    
+                                    interaction_success = False
+                                    try:
+                                        if label and await label.is_visible():
+                                            await label.tap(timeout=1500)
+                                            self.logs["mobile_logs"].append(f"Target #{i+1}: Tapped Label.")
+                                        else:
+                                            # Fallback to direct force click
+                                            await el.click(force=True, timeout=1500)
+                                            self.logs["mobile_logs"].append(f"Target #{i+1}: Force Clicked Input.")
+                                        
+                                        interaction_success = True
+                                    except Exception as e:
+                                        self.logs["mobile_logs"].append(f"Target #{i+1}: Interaction Failed ({e}).")
+                                        
+                                    await page.wait_for_timeout(300)
+                                    is_checked = await el.is_checked()
+                                    
+                                    if was_checked != is_checked:
+                                         state = "Checked" if is_checked else "Unchecked"
+                                         self._log_trace("check", f"[PASS] Mobile Interaction: Toggled <{tag} type='{inputType}'> to {state}.")
+                                         self.logs["mobile_logs"].append(f"Target #{i+1}: State Changed to {state}.")
+                                    elif interaction_success:
+                                         # Sometimes state doesn't toggle (e.g. radio button already checked), but interaction worked.
+                                         self._log_trace("warning", f"[INFO] Mobile Interaction: Tapped <{tag}> but state is unchanged (Already {was_checked}?).")
+                                    else:
+                                         self._log_trace("x", f"[FAIL] Mobile Interaction: Failed to toggle <{tag}>.")
+
                                 else:
-                                    # Standard Click/Tap interaction
+                                    # Standard Click/Tap interaction for Buttons/Links/TextInputs
                                     # Capture State Before
                                     url_before = page.url
                                     html_before = await page.content()
