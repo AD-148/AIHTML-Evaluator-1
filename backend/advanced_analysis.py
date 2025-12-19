@@ -217,6 +217,9 @@ class AdvancedAnalyzer:
                         self.logs["mobile_logs"].append(f"Found {count} interactive targets.")
                         self._log_trace("mag", f"[INFO] Mobile: Found {count} interactive elements to test.")
 
+                        primary_actions = []
+                        deferred_actions = []
+
                         for i in range(count): # Iterate ALL interactive elements
                             el = elements.nth(i)
                             if await el.is_visible():
@@ -251,101 +254,153 @@ class AdvancedAnalyzer:
                                     # Normalize strings for heuristics
                                     combined_desc = (text + " " + cls_attr + " " + aria_label + " " + name_attr).lower()
 
-                                    # Determine Interaction Type
-                                    if tag in ['input', 'textarea'] and inputType not in ['button', 'submit', 'checkbox', 'radio', 'range', 'color']:
-                                        # Smart Input Filling
-                                        fill_value = "test"
-                                        log_action = "Typed 'test'"
-                                        
-                                        if "email" in inputType or "email" in name_attr.lower():
-                                            fill_value = "test@example.com"
-                                            log_action = "Typed valid email"
-                                        elif "tel" in inputType or "phone" in name_attr.lower() or "mobile" in name_attr.lower():
-                                            fill_value = "9876543210"
-                                            log_action = "Typed phone number"
-                                        elif inputType == "number":
-                                            fill_value = "10"
-                                            log_action = "Typed number"
-                                        elif inputType == "date":
-                                            fill_value = "2025-01-01"
-                                            log_action = "Typed date"
-                                        elif inputType == "url":
-                                            fill_value = "https://example.com"
-                                            log_action = "Typed URL"
-                                        elif "search" in inputType:
-                                            fill_value = "test query"
-                                            log_action = "Typed search query"
-                                        
-                                        await el.fill(fill_value)
-                                        self.logs["mobile_logs"].append(f"Target #{i+1} ({tag}): {log_action} ('{fill_value}').")
-                                        self._log_trace("keyboard", f"[PASS] Mobile: {log_action} into <{tag} type='{inputType}'>.")
+                                    # Check if this is a "Close" action (heuristic)
+                                    is_close_action = False
+                                    if "close" in combined_desc or "dismiss" in combined_desc:
+                                         if id_attr == "close-btn" or "close" in class_attr.lower():
+                                              is_close_action = True
                                     
-                                    elif "scratch" in combined_desc or "reveal" in combined_desc or "scratchpad" in cls_attr.lower():
-                                        # Scratch Card Gesture Simulation
-                                        self._log_trace("point_up", f"[INFO] Mobile: Detected 'Scratch' intent on Target #{i+1}.")
-                                        box = await el.bounding_box()
-                                        if box:
-                                            center_x = box['x'] + box['width'] / 2
-                                            center_y = box['y'] + box['height'] / 2
-                                            width = box['width']
-                                            height = box['height']
-                                            
-                                            # Simulate a vigorous scratch (Zig-Zag across the area)
-                                            await page.mouse.move(center_x, center_y)
-                                            await page.mouse.down()
-                                            
-                                            # Scratch multiple times to ensure coverage
-                                            for s in range(10):
-                                                offset_x = (width * 0.4) if s % 2 == 0 else -(width * 0.4)
-                                                offset_y = (height * 0.4) * (s / 10.0) - (height * 0.2)
-                                                await page.mouse.move(center_x + offset_x, center_y + offset_y, steps=5)
-                                            
-                                            await page.mouse.up()
-                                            self.logs["mobile_logs"].append(f"Target #{i+1}: Performed Robust Scratch Gesture.")
-                                            
-                                            # Wait for UI update (winning screen)
-                                            await page.wait_for_timeout(3000) 
-                                            
-                                            self._log_trace("sparkles", f"[PASS] Mobile: Performed Scratch Gesture on <{tag}> and waited for result.")
-                                        else:
-                                             self.logs["mobile_logs"].append(f"Target #{i+1}: Scratch failed (No Bounding Box).")
-
-                                    elif "spin" in combined_desc or "wheel" in combined_desc:
-                                        # Spin Wheel -> Tap with logging
-                                        self._log_trace("point_up", f"[INFO] Mobile: Detected 'Spin' intent on Target #{i+1}.")
-                                        await el.tap(timeout=2000)
-                                        self.logs["mobile_logs"].append(f"Target #{i+1}: Spun the Wheel.")
-                                        self._log_trace("dart", f"[PASS] Mobile: Tapped Scale/Spin/Wheel element.")
+                                    action_data = {
+                                        "index": i,
+                                        "element": el,
+                                        "tag": tag,
+                                        "id_attr": id_attr,
+                                        "class_attr": class_attr,
+                                        "text": text,
+                                        "el_ident": el_ident,
+                                        "inputType": inputType,
+                                        "combined_desc": combined_desc,
+                                        "name_attr": name_attr,
+                                        "is_close": is_close_action
+                                    }
                                     
+                                    if is_close_action:
+                                        deferred_actions.append(action_data)
                                     else:
-                                        # Standard Click/Tap interaction
-                                        # Capture State Before
-                                        url_before = page.url
-                                        html_before = await page.content()
-                                        
-                                        # Tap with INCREASED TIMEOUT (2000ms)
-                                        await el.tap(timeout=2000)
-                                        await page.wait_for_timeout(600) # Wait for JS/Animation
-                                        
-                                        # Capture State After
-                                        url_after = page.url
-                                        html_after = await page.content()
-                                        
-                                        # Verify State Change
-                                        if url_before != url_after:
-                                             self._log_trace("rocket", f"[PASS] Mobile: Tapped <{tag}> and navigated to {url_after}.")
-                                             self.logs["mobile_logs"].append(f"Target #{i+1}: Triggered Navigation.")
-                                        elif html_before != html_after:
-                                             self._log_trace("white_check_mark", f"[PASS] Mobile: Tapped <{tag}> and triggered UI update.")
-                                             self.logs["mobile_logs"].append(f"Target #{i+1}: Triggered Visual Update.")
-                                        else:
-                                             # No change detected -> Likely broken listener
-                                             self._log_trace("x", f"[FAIL] Mobile: Tapped <{tag}> but page state did not change (Unresponsive).")
-                                             self.logs["mobile_logs"].append(f"Target #{i+1}: Unresponsive (No DOM/URL change).")
-                                             
+                                        primary_actions.append(action_data)
+
                                 except Exception as e:
-                                    self.logs["mobile_logs"].append(f"Target #{i+1}: FAILED INTERACTION. Error: {e}")
-                                    self._log_trace("x", f"[FAIL] Mobile: Failed to tap target #{i+1}. Error: {e}")
+                                    logger.warning(f"Error inspecting element #{i}: {e}")
+
+                        # PHASE D.2: EXECUTE ACTIONS: Primary First, then Deferred (Closing)
+                        all_actions = primary_actions + deferred_actions
+                        
+                        for action in all_actions:
+                            i = action["index"]
+                            el = action["element"]
+                            tag = action["tag"]
+                            el_ident = action["el_ident"]
+                            inputType = action["inputType"]
+                            combined_desc = action["combined_desc"]
+                            name_attr = action["name_attr"]
+                            text = action["text"]
+                            
+                            if not await el.is_visible():
+                                 self._log_trace("ghost", f"[INFO] Mobile: Target #{i+1} (<{el_ident}>) is no longer visible. Skipping.")
+                                 continue
+
+                            try:
+                                # Log Intent
+                                self._log_trace("point_right", f"[INFO] Mobile: Approaching target #{i+1} (<{el_ident}> '{text}')...")
+                                
+                                # Scroll into view
+                                await el.scroll_into_view_if_needed()
+
+                                # Determine Interaction Type
+                                if tag in ['input', 'textarea'] and inputType not in ['button', 'submit', 'checkbox', 'radio', 'range', 'color']:
+                                    # Smart Input Filling
+                                    fill_value = "test"
+                                    log_action = "Typed 'test'"
+                                    
+                                    if "email" in inputType or "email" in name_attr.lower():
+                                        fill_value = "test@example.com"
+                                        log_action = "Typed valid email"
+                                    elif "tel" in inputType or "phone" in name_attr.lower() or "mobile" in name_attr.lower():
+                                        fill_value = "9876543210"
+                                        log_action = "Typed phone number"
+                                    elif inputType == "number":
+                                        fill_value = "10"
+                                        log_action = "Typed number"
+                                    elif inputType == "date":
+                                        fill_value = "2025-01-01"
+                                        log_action = "Typed date"
+                                    elif inputType == "url":
+                                        fill_value = "https://example.com"
+                                        log_action = "Typed URL"
+                                    elif "search" in inputType:
+                                        fill_value = "test query"
+                                        log_action = "Typed search query"
+                                    
+                                    await el.fill(fill_value)
+                                    self.logs["mobile_logs"].append(f"Target #{i+1} ({tag}): {log_action} ('{fill_value}').")
+                                    self._log_trace("keyboard", f"[PASS] Mobile: {log_action} into <{tag} type='{inputType}'>.")
+                                
+                                elif "scratch" in combined_desc or "reveal" in combined_desc or "scratchpad" in action["class_attr"].lower():
+                                    # Scratch Card Gesture Simulation
+                                    self._log_trace("point_up", f"[INFO] Mobile: Detected 'Scratch' intent on Target #{i+1}.")
+                                    box = await el.bounding_box()
+                                    if box:
+                                        center_x = box['x'] + box['width'] / 2
+                                        center_y = box['y'] + box['height'] / 2
+                                        width = box['width']
+                                        height = box['height']
+                                        
+                                        # Simulate a vigorous scratch (Zig-Zag across the area)
+                                        await page.mouse.move(center_x, center_y)
+                                        await page.mouse.down()
+                                        
+                                        # Scratch multiple times to ensure coverage
+                                        for s in range(10):
+                                            offset_x = (width * 0.4) if s % 2 == 0 else -(width * 0.4)
+                                            offset_y = (height * 0.4) * (s / 10.0) - (height * 0.2)
+                                            await page.mouse.move(center_x + offset_x, center_y + offset_y, steps=5)
+                                        
+                                        await page.mouse.up()
+                                        self.logs["mobile_logs"].append(f"Target #{i+1}: Performed Robust Scratch Gesture.")
+                                        
+                                        # Wait for UI update (winning screen)
+                                        await page.wait_for_timeout(3000) 
+                                        
+                                        self._log_trace("sparkles", f"[PASS] Mobile: Performed Scratch Gesture on <{tag}> and waited for result.")
+                                    else:
+                                         self.logs["mobile_logs"].append(f"Target #{i+1}: Scratch failed (No Bounding Box).")
+
+                                elif "spin" in combined_desc or "wheel" in combined_desc:
+                                    # Spin Wheel -> Tap with logging
+                                    self._log_trace("point_up", f"[INFO] Mobile: Detected 'Spin' intent on Target #{i+1}.")
+                                    await el.tap(timeout=2000)
+                                    self.logs["mobile_logs"].append(f"Target #{i+1}: Spun the Wheel.")
+                                    self._log_trace("dart", f"[PASS] Mobile: Tapped Scale/Spin/Wheel element.")
+                                
+                                else:
+                                    # Standard Click/Tap interaction
+                                    # Capture State Before
+                                    url_before = page.url
+                                    html_before = await page.content()
+                                    
+                                    # Tap with INCREASED TIMEOUT (2000ms)
+                                    await el.tap(timeout=2000)
+                                    await page.wait_for_timeout(600) # Wait for JS/Animation
+                                    
+                                    # Capture State After
+                                    url_after = page.url
+                                    html_after = await page.content()
+                                    
+                                    # Verify State Change
+                                    if url_before != url_after:
+                                         self._log_trace("rocket", f"[PASS] Mobile: Tapped <{el_ident}> and navigated to {url_after}.")
+                                         self.logs["mobile_logs"].append(f"Target #{i+1}: Triggered Navigation.")
+                                    elif html_before != html_after:
+                                         self._log_trace("white_check_mark", f"[PASS] Mobile: Tapped <{el_ident}> and triggered UI update.")
+                                         self.logs["mobile_logs"].append(f"Target #{i+1}: Triggered Visual Update.")
+                                    else:
+                                         # No change detected -> Likely broken listener
+                                         self._log_trace("x", f"[FAIL] Mobile: Tapped <{el_ident}> but page state did not change (Unresponsive).")
+                                         self.logs["mobile_logs"].append(f"Target #{i+1}: Unresponsive (No DOM/URL change).")
+                                         
+                            except Exception as e:
+                                self.logs["mobile_logs"].append(f"Target #{i+1}: FAILED INTERACTION. Error: {e}")
+                                self._log_trace("x", f"[FAIL] Mobile: Failed to tap target #{i+1}. Error: {e}")
                         
                         # 2. Landscape check
                         await page.set_viewport_size({"width": 844, "height": 390})
