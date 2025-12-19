@@ -212,6 +212,7 @@ class AdvancedAnalyzer:
                          self._log_trace("white_check_mark", f"[PASS] Typography: Modern font detected ('{dna['font_family']}').")
                          
                     results["visual"] = self._generate_visual_summary(dna)
+                    self._log_trace("art", f"Visual Check Complete. DNA extracted: {len(dna['modern_css'])} modern features.")
 
                     # --- PHASE D: MOBILE SIMULATION (Resize Page) ---
                     # 1. Portrait
@@ -417,9 +418,17 @@ class AdvancedAnalyzer:
                                          
                             except Exception as e:
                                 self.logs["mobile_logs"].append(f"Target #{i+1}: FAILED INTERACTION. Error: {e}")
-                                self._log_trace(f"[FAIL] Mobile Interaction: Error tapping target #{i+1}. Reason: {e}")
+                                self._log_trace(f"[FAIL] Mobile Interaction: Error tapping target #{i+1}. Reason: {str(e)[:100]}")
                         
-                        # 2. Landscape check
+                        self._log_trace("checkered_flag", "[INFO] Mobile: Interaction Loop Finished.")
+
+                    except Exception as loop_err:
+                        self._log_trace(f"[FAIL] Mobile Loop Crashed: {loop_err}")
+
+                    # 2. Landscape check
+                    try:
+                        self._log_section("5. CROSS-PLATFORM CHECK")
+                        self._log_trace("iphone", "Verifying Landscape Mode (Orientation Test)...")
                         await page.set_viewport_size({"width": 844, "height": 390})
                         await page.wait_for_timeout(200)
                         scroll_width = await page.evaluate("document.body.scrollWidth")
