@@ -164,10 +164,12 @@ class AdvancedAnalyzer:
                         
                         // Shim window.open to prevent popups
                         window.open = (url) => console.log('Shimmed window.open:', url);
+                        
+                        console.log("SHIM INJECTED CONFIRMED");
                     """)
 
                     await page.goto(app_url)
-                    await page.set_content(self.html_content)
+                    # await page.set_content(self.html_content) # Redundant and potential cause of double-execution
 
                     # --- PHASE A: AXE ACCESSIBILITY (Manual Injection) ---
                     self._log_section("2. ACCESSIBILITY AUDIT (Axe-Core)")
@@ -192,10 +194,11 @@ class AdvancedAnalyzer:
                         if not axe_results.get("violations"):
                             self._log_trace("white_check_mark", "[PASS] Accessibility Audit: No violations found.")
                         else:
-                            count = len(axe_results.get("violations"))
-                            self._log_trace("x", f"[FAIL] Accessibility Audit: Found {count} rule violations.")
-                            
-                            # Detailed Reporting for Axe
+                            # Detailed Reporting for Axe - Log specific failures instead of generic count
+                            for v in axe_results.get("violations", []):
+                                help_text = v.get("help")
+                                impact = v.get("impact", "unknown").upper()
+                                self._log_trace("x", f"[FAIL] Accessibility Audit: [{impact}] {help_text}")
                             for v in axe_results.get("violations", []):
                                 help_text = v.get("help")
                                 self.logs["warnings"].append(f"[AXE] {help_text}")
