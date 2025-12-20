@@ -372,7 +372,7 @@ async def _run_agent(system_prompt, messages, context_str="") -> Dict:
 
     try:
         model = genai.GenerativeModel(
-            model_name="gemini-1.5-pro",
+            model_name="gemini-2.5-pro",
             system_instruction=system_prompt,
             generation_config={"response_mime_type": "application/json"}
         )
