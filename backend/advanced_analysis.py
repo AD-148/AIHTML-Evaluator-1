@@ -63,20 +63,26 @@ class AdvancedAnalyzer:
     def _handle_js_error(self, error):
         """Handles JS errors with context and hints."""
         msg = str(error)
-        hint = ""
-        if "moengage" in msg.lower():
-            hint = " [HINT: MoEngage SDK might be missing or blocked in the test environment.]"
-        elif "is not defined" in msg.lower():
-             hint = " [HINT: An external variable or library is missing.]"
+        clean_msg = msg.replace("JS Error:", "").strip()
         
-        # Log to both critical logs (for summary) and trace (for chronological detail)
-        # Avoid duplicate "JS Error:" prefix if already in msg
-        clean_msg = msg.replace("JS Error:", "").strip()
-        # Log to both critical logs (for summary) and trace (for chronological detail)
-        # Avoid duplicate "JS Error:" prefix if already in msg
-        clean_msg = msg.replace("JS Error:", "").strip()
-        self.logs["critical"].append(f"JS Error: {clean_msg}")
-        self._log_trace("boom", f"[FAIL] JS Runtime Error: {clean_msg}{hint}")
+        is_sdk_error = False
+        hint = ""
+        
+        if "moengage" in msg.lower():
+            hint = " [Handled as SDK Stub]"
+            is_sdk_error = True
+        elif "is not defined" in msg.lower():
+            hint = " [Possible missing variable]"
+            # We don't auto-forgive all undefined errors, but we can be softer
+            
+        if is_sdk_error:
+            # SDK Errors -> Warning only
+            self.logs["warnings"].append(f"SDK Warning: {clean_msg}")
+            self._log_trace("warning", f"[WARN] SDK Stub Logic Active: {clean_msg}{hint}")
+        else:
+            # Real Errors -> Critical
+            self.logs["critical"].append(f"JS Error: {clean_msg}")
+            self._log_trace("boom", f"[FAIL] JS Runtime Error: {clean_msg}{hint}")
 
     async def analyze(self) -> Dict[str, str]:
         """

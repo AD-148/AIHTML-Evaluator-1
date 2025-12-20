@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>SDK Error Test</title>
+</head>
+
+<body>
+    <h1>SDK Handling Verification</h1>
+
+    <!-- Case 1: MoEngage Specific Error (Should be WARN) -->
+    <button id="sdk-error-btn" onclick="throw new Error('Critical MoEngage Failure: SDK not initialized')">
+        Trigger SDK Error
+    </button>
+
+    <!-- Case 2: Real Logic Error (Should be FAIL) -->
+    <button id="real-error-btn" onclick="throw new Error('Calculation Failed: Division by Zero')">
+        Trigger Real Error
+    </button>
+</body>
+
+</html>
