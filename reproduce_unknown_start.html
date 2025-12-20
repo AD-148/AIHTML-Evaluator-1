@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Unknown Button Test</title>
+</head>
+
+<body>
+    <div id="modal" style="padding: 20px; border: 1px solid black; margin: 20px;">
+        <!-- The "Start" button with UNKNOWN text and BAD aria-label -->
+        <!-- Logic test: Should score > Close Button -->
+        <button id="unknown-start" aria-label="Close" style="background: blue; color: white;">Launch Experience</button>
+
+        <!-- The Real Close Button -->
+        <button id="real-close" aria-label="Close">X</button>
+    </div>
+
+    <div id="step-2" style="display:none; margin-top:20px;">
+        <h2>Step 2 Loaded</h2>
+        <input type="text" id="input-field">
+        <button id="submit-btn" style="background: green; color: white;">Submit</button>
+    </div>
+
+    <script>
+        document.getElementById('unknown-start').onclick = function () {
+            document.getElementById('step-2').style.display = 'block';
+            this.innerText = 'Launched!';
+        };
+        document.getElementById('real-close').onclick = function () {
+            document.getElementById('modal').style.display = 'none';
+        };
+    </script>
+</body>
+
+</html>

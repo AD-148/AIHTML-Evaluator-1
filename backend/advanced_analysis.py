@@ -327,12 +327,12 @@ class AdvancedAnalyzer:
                                              score += 2 
                                     
                                     # HIGH PRIORITY: "Next" / "Submit" / "Start" Buttons
-                                    # CHECK THIS FIRST. If it matches, we ignore "Close" signals (which might be copy-paste error in ARIA)
+                                    # (Bonus for known positive signals, but NOT required)
                                     combined_text = (text + " " + id_attr + " " + cls_attr + " " + aria).lower()
                                     is_positive = False
                                     
                                     if any(w in combined_text for w in ['next', 'submit', 'continue', 'proceed', 'start', 'ok', 'yes']):
-                                        score += 50 # Massive Bonus
+                                        score += 5 # Standard bonus
                                         is_positive = True
                                         
                                     # MEDIUM PRIORITY: Standard Buttons
@@ -340,16 +340,40 @@ class AdvancedAnalyzer:
                                         score += 2
                                         
                                     # LOW PRIORITY: "Close" / "Cancel" / "Back" 
-                                    # ONLY apply penalty if it wasn't flagged as positive intent.
-                                    if not is_positive:
-                                        is_close = False
-                                        if any(w in combined_text for w in ['close', 'cancel', 'back', 'dismiss', 'prev', 'skip', 'no, thanks']):
-                                            is_close = True
-                                        elif text in ['x', '×', '✕', '+']: 
-                                            is_close = True
+                                    # ROBUST CLOSE DETECTION:
+                                    # Principle: Trust VISIBLE TEXT over invisible attributes (aria-label, class, data-dismiss) if they conflict.
+                                    # This handles cases where buttons have contradictory signals (e.g., text="Save", aria-label="Close").
+                                    
+                                    is_close = False
+                                    
+                                    # 1. Check Explicit Text (Strongest Signal)
+                                    text_lower = text.lower()
+                                    if text_lower in ['close', 'cancel', 'back', 'dismiss', 'no, thanks', 'skip', 'x', '×', '✕']:
+                                        is_close = True
                                         
-                                        if is_close:
-                                            score -= 50
+                                    # 2. Check Attributes (Weaker Signal)
+                                    # Only trust aria/class as "Close" if the visible text is ambiguous (empty, icon-only, or very short)
+                                    elif not text or len(text) < 3: 
+                                        if any(w in combined_text for w in ['close', 'cancel', 'dismiss']):
+                                            is_close = True
+                                            
+                                    # 3. Check data-dismiss (Standard Bootstrap pattern)
+                                    # If text is explicit and NOT "Close", we ignore data-dismiss to avoid false positives.
+                                    # (e.g., A "Submit & Close" button should be treated as "Submit" first, which gives it a positive score bias)
+                                    dismiss_attr = await el.evaluate("el => el.getAttribute('data-dismiss')")
+                                    if dismiss_attr and not is_positive: 
+                                        # Only treat as close if we didn't identify it as a positive action (Start/Next)
+                                        # AND the text doesn't look like a substantial label.
+                                        if not is_positive and len(text) < 15: 
+                                           pass
+
+                                    # Final Decision: Apply penalty logic
+                                    # If it was marked Positive (Start/Next), NEVER mark it as Close.
+                                    if is_positive:
+                                        is_close = False
+                                        
+                                    if is_close:
+                                        score -= 50
                                         
                                     candidates.append({
                                         "element": el,
