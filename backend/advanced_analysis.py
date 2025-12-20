@@ -485,8 +485,19 @@ class AdvancedAnalyzer:
                                         break # BREAK CANDIDATE LOOP -> Start Next Round
                                     else:
                                         # No significant change. 
-                                        # For inputs, this is expected. 
-                                        self._log_trace("ghost", f"[INFO] Mobile: Action successful, but no UI change detected. Continuing round...")
+                                        # Distinguish between Input Filling (OK) and Button Clicks (FAIL)
+                                        try:
+                                            tag_name = await el.evaluate("el => el.tagName")
+                                            tag_name = tag_name.lower() if tag_name else ""
+                                        except:
+                                            tag_name = ""
+                                            
+                                        input_type = await el.get_attribute("type") or ""
+                                        
+                                        if tag_name in ['button', 'a'] or (tag_name == 'input' and input_type in ['submit', 'button', 'image']):
+                                            self._log_trace("x", f"[FAIL] Mobile: Unresponsive Element! Clicked {desc} but no UI update or navigation occurred.")
+                                        else:
+                                            self._log_trace("ghost", f"[INFO] Mobile: Action successful, but no UI change detected. Continuing round...")
                                         
                                 except Exception as e:
                                      # Log specific JS error if it was a runtime crash
