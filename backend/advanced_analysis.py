@@ -307,12 +307,11 @@ class AdvancedAnalyzer:
                                     name_attr = await el.evaluate("el => el.getAttribute('name')") or ""
                                     aria = await el.evaluate("el => el.getAttribute('aria-label')") or ""
                                     role = await el.evaluate("el => el.getAttribute('role')") or ""
+                                    disabled_attr = await el.evaluate("el => el.getAttribute('disabled')")
                                     
                                     # Create Unique Signature
-                                    # We include round number ONLY for inputs (allow re-filling in new rounds if cleared?) 
-                                    # No, safer to just track unique element. But if page reloads, IDs might persist.
-                                    # Let's use specific signature:
-                                    signature = f"{tag}|{id_attr}|{text}|{cls_attr}|{name_attr}"
+                                    # We include 'disabled' state so if a button becomes enabled, we treat it as a new opportunity.
+                                    signature = f"{tag}|{id_attr}|{text}|{cls_attr}|{name_attr}|{disabled_attr}"
                                     
                                     if signature in executed_actions:
                                         continue # Skip already handled elements
@@ -328,29 +327,29 @@ class AdvancedAnalyzer:
                                              score += 2 
                                     
                                     # HIGH PRIORITY: "Next" / "Submit" / "Start" Buttons
+                                    # CHECK THIS FIRST. If it matches, we ignore "Close" signals (which might be copy-paste error in ARIA)
                                     combined_text = (text + " " + id_attr + " " + cls_attr + " " + aria).lower()
-                                    if any(w in combined_text for w in ['next', 'submit', 'continue', 'proceed', 'start', 'ok', 'yes']):
-                                        score += 5
-                                        
+                                    is_positive = False
                                     
+                                    if any(w in combined_text for w in ['next', 'submit', 'continue', 'proceed', 'start', 'ok', 'yes']):
+                                        score += 50 # Massive Bonus
+                                        is_positive = True
+                                        
                                     # MEDIUM PRIORITY: Standard Buttons
                                     if tag == 'button' or role == 'button':
                                         score += 2
                                         
-                                    # LOW PRIORITY: "Close" / "Cancel" / "Back" (Avoid ending flow early)
-                                    # We want these STRICTLY LAST.
-                                    # Check data-dismiss attribute too (not captured above, let's just check combined_text if possible or re-eval)
-                                    # Actually, let's grab it fresh or rely on class/aria.
-                                    # "close" in class is very common.
-                                    
-                                    is_close = False
-                                    if any(w in combined_text for w in ['close', 'cancel', 'back', 'dismiss', 'prev', 'skip', 'no, thanks']):
-                                        is_close = True
-                                    elif text in ['x', '×', '✕', '+']: # + often verified as close in rotated css? No, usually X.
-                                        is_close = True
-                                    
-                                    if is_close:
-                                        score -= 50 # Massive penalty to ensure it's bottom of list
+                                    # LOW PRIORITY: "Close" / "Cancel" / "Back" 
+                                    # ONLY apply penalty if it wasn't flagged as positive intent.
+                                    if not is_positive:
+                                        is_close = False
+                                        if any(w in combined_text for w in ['close', 'cancel', 'back', 'dismiss', 'prev', 'skip', 'no, thanks']):
+                                            is_close = True
+                                        elif text in ['x', '×', '✕', '+']: 
+                                            is_close = True
+                                        
+                                        if is_close:
+                                            score -= 50
                                         
                                     candidates.append({
                                         "element": el,

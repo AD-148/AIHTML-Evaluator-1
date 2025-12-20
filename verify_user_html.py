@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sys
 from backend.advanced_analysis import AdvancedAnalyzer
 import logging
 
@@ -8,16 +9,24 @@ logging.basicConfig(level=logging.INFO)
 
 async def run_verification():
     # Read HTML from test_input.html
-    file_path = r"C:\Users\USER\.gemini\antigravity\scratch\html_judge\reproduce_issue_survey.html"
+    # Check for command line argument
+    if len(sys.argv) > 1:
+        file_name = sys.argv[1]
+    else:
+        file_name = "reproduce_issue_survey.html"
+        
+    file_path = os.path.join(os.getcwd(), file_name)
+    print(f"Running AdvancedAnalyzer on {file_path}...")
+    
     if not os.path.exists(file_path):
-        print(f"Error: {file_path} not found. Please create it with your HTML content.")
-        return
+        print(f"Error: File not found: {file_path}")
+        sys.exit(1)
 
     with open(file_path, "r", encoding="utf-8") as f:
-        user_html = f.read()
+        html_content = f.read()
 
     print(f"Running AdvancedAnalyzer on {file_path}...")
-    analyzer = AdvancedAnalyzer(user_html)
+    analyzer = AdvancedAnalyzer(html_content) # Changed from user_html to html_content
     
     # Run Async Analysis
     results = await analyzer.analyze()

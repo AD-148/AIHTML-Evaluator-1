@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Survey Feedback</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --color-primary-main: #007AFF;
+            --color-primary-light: #339DFF;
+            --color-primary-dark: #0056B3;
+            --color-secondary-main: #6C757D;
+            --color-secondary-light: #8E9AA1;
+            --color-secondary-dark: #50575D;
+            --color-feedback-success: #28A745;
+            --color-feedback-error: #DC3545;
+            --color-feedback-warning: #FFC107;
+            --color-feedback-info: #17A2B8;
+            --color-neutral-white: #FFFFFF;
+            --color-neutral-grey-900: #212529;
+            --color-neutral-grey-500: #ADB5BD;
+            --color-neutral-grey-100: #F8F9FA;
+            --color-neutral-black: #000000;
+            --font-family-sans: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --font-size-xs: 0.75rem;
+            --font-size-sm: 0.875rem;
+            --font-size-base: 1rem;
+            --font-size-lg: 1.125rem;
+            --font-size-xl: 1.5rem;
+            --font-size-xxl: 2rem;
+            --font-weight-light: 300;
+            --font-weight-regular: 400;
+            --font-weight-medium: 500;
+            --font-weight-bold: 700;
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+            --spacing-xxl: 48px;
+            --border-radius-sm: 4px;
+            --border-radius-md: 8px;
+            --border-radius-lg: 12px;
+            --border-radius-pill: 9999px
+        }
+
+        .hidden {
+            display: none !important
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box
+        }
+
+        @media(prefers-reduced-motion:reduce) {
+
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100">
+    <main id="main-container" class="w-full h-full overflow-hidden"><button id="close-button"
+            class="absolute top-4 right-4 z-50 w-10 h-10 flex items-center justify-center rounded-full bg-white shadow-md text-gray-700 hover:bg-gray-100 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            tabindex="0" aria-label="Close survey"><svg class="w-5 h-5" fill="none" stroke="currentColor"
+                viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg></button>
+        <div id="screen-welcome" class="h-full w-full overflow-y-auto p-6 landscape:p-8">
+            <div
+                class="flex flex-col items-center justify-center h-full max-w-2xl mx-auto text-center space-y-6 landscape:space-y-4">
+                <div
+                    class="w-20 h-20 landscape:w-16 landscape:h-16 bg-blue-500 rounded-full flex items-center justify-center mb-4 landscape:mb-2">
+                    <svg class="w-10 h-10 landscape:w-8 landscape:h-8 text-white" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                        </path>
+                    </svg></div>
+                <h1 class="text-3xl landscape:text-2xl font-bold text-gray-900">We'd Love Your Feedback</h1>
+                <p class="text-lg landscape:text-base text-gray-600 max-w-lg">Help us improve by sharing your thoughts.
+                    This quick survey will only take a minute of your time.</p><button id="start-survey-button"
+                    class="mt-6 landscape:mt-4 px-8 py-3 landscape:py-2 bg-blue-500 text-white rounded-lg font-medium text-lg landscape:text-base hover:bg-blue-600 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-md"
+                    tabindex="0">Start Survey</button>
+            </div>
+        </div>
+        <div id="screen-satisfaction" class="hidden h-full w-full overflow-y-auto p-6 landscape:p-8">
+            <div class="flex flex-col h-full max-w-2xl mx-auto">
+                <div class="flex-1 flex flex-col justify-center space-y-6 landscape:space-y-4">
+                    <h2 class="text-2xl landscape:text-xl font-bold text-gray-900 text-center">How satisfied are you
+                        with your overall experience?</h2>
+                    <div class="space-y-3 landscape:space-y-2">
+                        <div class="radio-option bg-white rounded-lg p-4 landscape:p-3 border-2 border-gray-200 cursor-pointer hover:border-blue-500 transition-colors"
+                            data-value="very-satisfied" role="button" tabindex="0" aria-pressed="false">
+                            <div class="flex items-center space-x-3">
+                                <div
+                                    class="radio-indicator w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center">
+                                    <div class="radio-dot w-3 h-3 rounded-full bg-blue-500 hidden"></div>
+                                </div><span class="text-base landscape:text-sm font-medium text-gray-900">Very
+                                    Satisfied</span>
+                            </div>
+                        </div>
+                        <div class="radio-option bg-white rounded-lg p-4 landscape:p-3 border-2 border-gray-200 cursor-pointer hover:border-blue-500 transition-colors"
+                            data-value="satisfied" role="button" tabindex="0" aria-pressed="false">
+                            <div class="flex items-center space-x-3">
+                                <div
+                                    class="radio-indicator w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center">
+                                    <div class="radio-dot w-3 h-3 rounded-full bg-blue-500 hidden"></div>
+                                </div><span
+                                    class="text-base landscape:text-sm font-medium text-gray-900">Satisfied</span>
+                            </div>
+                        </div>
+                        <div class="radio-option bg-white rounded-lg p-4 landscape:p-3 border-2 border-gray-200 cursor-pointer hover:border-blue-500 transition-colors"
+                            data-value="neutral" role="button" tabindex="0" aria-pressed="false">
+                            <div class="flex items-center space-x-3">
+                                <div
+                                    class="radio-indicator w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center">
+                                    <div class="radio-dot w-3 h-3 rounded-full bg-blue-500 hidden"></div>
+                                </div><span class="text-base landscape:text-sm font-medium text-gray-900">Neutral</span>
+                            </div>
+                        </div>
+                        <div class="radio-option bg-white rounded-lg p-4 landscape:p-3 border-2 border-gray-200 cursor-pointer hover:border-blue-500 transition-colors"
+                            data-value="dissatisfied" role="button" tabindex="0" aria-pressed="false">
+                            <div class="flex items-center space-x-3">
+                                <div
+                                    class="radio-indicator w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center">
+                                    <div class="radio-dot w-3 h-3 rounded-full bg-blue-500 hidden"></div>
+                                </div><span
+                                    class="text-base landscape:text-sm font-medium text-gray-900">Dissatisfied</span>
+                            </div>
+                        </div>
+                        <div class="radio-option bg-white rounded-lg p-4 landscape:p-3 border-2 border-gray-200 cursor-pointer hover:border-blue-500 transition-colors"
+                            data-value="very-dissatisfied" role="button" tabindex="0" aria-pressed="false">
+                            <div class="flex items-center space-x-3">
+                                <div
+                                    class="radio-indicator w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center">
+                                    <div class="radio-dot w-3 h-3 rounded-full bg-blue-500 hidden"></div>
+                                </div><span class="text-base landscape:text-sm font-medium text-gray-900">Very
+                                    Dissatisfied</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-between mt-6 landscape:mt-4 pt-4 border-t border-gray-200"><button
+                        id="back-to-welcome-button"
+                        class="px-6 py-2 landscape:py-1.5 bg-gray-200 text-gray-700 rounded-lg font-medium text-base landscape:text-sm hover:bg-gray-300 focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition-colors"
+                        tabindex="0">Back</button><button id="next-to-suggestions-button"
+                        class="px-6 py-2 landscape:py-1.5 bg-blue-500 text-white rounded-lg font-medium text-base landscape:text-sm hover:bg-blue-600 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        tabindex="0" disabled>Next</button></div>
+            </div>
+        </div>
+        <div id="screen-suggestions" class="hidden h-full w-full overflow-y-auto p-6 landscape:p-8">
+            <div class="flex flex-col h-full max-w-2xl mx-auto">
+                <div class="flex-1 flex flex-col justify-center space-y-6 landscape:space-y-4">
+                    <h2 class="text-2xl landscape:text-xl font-bold text-gray-900 text-center">How can we improve?</h2>
+                    <p class="text-base landscape:text-sm text-gray-600 text-center">Share any suggestions or feedback
+                        you have for us.</p><textarea id="suggestions-input"
+                        class="w-full h-40 landscape:h-32 p-4 landscape:p-3 border-2 border-gray-300 rounded-lg text-base landscape:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                        placeholder="Type your suggestions here..." tabindex="0"></textarea>
+                </div>
+                <div class="flex justify-between mt-6 landscape:mt-4 pt-4 border-t border-gray-200"><button
+                        id="back-to-satisfaction-button"
+                        class="px-6 py-2 landscape:py-1.5 bg-gray-200 text-gray-700 rounded-lg font-medium text-base landscape:text-sm hover:bg-gray-300 focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition-colors"
+                        tabindex="0">Back</button><button id="submit-survey-button"
+                        class="px-6 py-2 landscape:py-1.5 bg-green-500 text-white rounded-lg font-medium text-base landscape:text-sm hover:bg-green-600 focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                        tabindex="0">Submit Feedback</button></div>
+            </div>
+        </div>
+        <div id="screen-thankyou" class="hidden h-full w-full overflow-y-auto p-6 landscape:p-8">
+            <div
+                class="flex flex-col items-center justify-center h-full max-w-2xl mx-auto text-center space-y-6 landscape:space-y-4">
+                <div
+                    class="w-20 h-20 landscape:w-16 landscape:h-16 bg-green-500 rounded-full flex items-center justify-center mb-4 landscape:mb-2">
+                    <svg class="w-10 h-10 landscape:w-8 landscape:h-8 text-white" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg></div>
+                <h1 class="text-3xl landscape:text-2xl font-bold text-gray-900">Thank You!</h1>
+                <p class="text-lg landscape:text-base text-gray-600 max-w-lg">We appreciate you taking the time to share
+                    your feedback. Your input helps us improve.</p><button id="close-thankyou-button"
+                    class="mt-6 landscape:mt-4 px-8 py-3 landscape:py-2 bg-blue-500 text-white rounded-lg font-medium text-lg landscape:text-base hover:bg-blue-600 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-md"
+                    tabindex="0">Close</button>
+            </div>
+        </div>
+    </main>
+    <script>
+        window.onload = function () {
+            let currentScreen = 'welcome';
+            let surveyData = {
+                satisfaction: '',
+                suggestions: ''
+            };
+            const screens = {
+                welcome: document.getElementById('screen-welcome'),
+                satisfaction: document.getElementById('screen-satisfaction'),
+                suggestions: document.getElementById('screen-suggestions'),
+                thankyou: document.getElementById('screen-thankyou')
+            };
+            const closeButton = document.getElementById('close-button');
+            const startSurveyButton = document.getElementById('start-survey-button');
+            const backToWelcomeButton = document.getElementById('back-to-welcome-button');
+            const nextToSuggestionsButton = document.getElementById('next-to-suggestions-button');
+            const backToSatisfactionButton = document.getElementById('back-to-satisfaction-button');
+            const submitSurveyButton = document.getElementById('submit-survey-button');
+            const closeThankyouButton = document.getElementById('close-thankyou-button');
+            const radioOptions = document.querySelectorAll('.radio-option');
+            const suggestionsInput = document.getElementById('suggestions-input');
+
+            function updateViewState(screenName) {
+                Object.keys(screens).forEach(key => {
+                    if (key === screenName) {
+                        screens[key].classList.remove('hidden')
+                    } else {
+                        screens[key].classList.add('hidden')
+                    }
+                });
+                currentScreen = screenName
+            }
+
+            function handleRadioSelection(option) {
+                radioOptions.forEach(opt => {
+                    opt.classList.remove('border-blue-500');
+                    opt.classList.add('border-gray-200');
+                    opt.querySelector('.radio-dot').classList.add('hidden');
+                    opt.setAttribute('aria-pressed', 'false')
+                });
+                option.classList.remove('border-gray-200');
+                option.classList.add('border-blue-500');
+                option.querySelector('.radio-dot').classList.remove('hidden');
+                option.setAttribute('aria-pressed', 'true');
+                surveyData.satisfaction = option.dataset.value;
+                nextToSuggestionsButton.disabled = false
+            }
+
+            function handleRadioClick(event) {
+                const option = event.currentTarget;
+                handleRadioSelection(option)
+            }
+
+            function handleRadioKeypress(event) {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    const option = event.currentTarget;
+                    handleRadioSelection(option)
+                }
+            }
+            radioOptions.forEach(option => {
+                option.addEventListener('click', handleRadioClick);
+                option.addEventListener('keypress', handleRadioKeypress)
+            });
+
+            function dismissMessage() {
+                if (window.moengage) {
+                    window.moengage.dismissMessage()
+                }
+            }
+            closeButton.addEventListener('click', function () {
+                if (window.moengage) {
+                    window.moengage.trackDismiss('close-button')
+                }
+                dismissMessage()
+            });
+            closeButton.addEventListener('keypress', function (event) {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    if (window.moengage) {
+                        window.moengage.trackDismiss('close-button')
+                    }
+                    dismissMessage()
+                }
+            });
+            startSurveyButton.addEventListener('click', function () {
+                updateViewState('satisfaction')
+            });
+            startSurveyButton.addEventListener('keypress', function (event) {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    updateViewState('satisfaction')
+                }
+            });
+            backToWelcomeButton.addEventListener('click', function () {
+                updateViewState('welcome')
+            });
+            backToWelcomeButton.addEventListener('keypress', function (event) {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    updateViewState('welcome')
+                }
+            });
+            nextToSuggestionsButton.addEventListener('click', function () {
+                if (surveyData.satisfaction) {
+                    updateViewState('suggestions')
+                }
+            });
+            nextToSuggestionsButton.addEventListener('keypress', function (event) {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    if (surveyData.satisfaction) {
+                        updateViewState('suggestions')
+                    }
+                }
+            });
+            backToSatisfactionButton.addEventListener('click', function () {
+                updateViewState('satisfaction')
+            });
+            backToSatisfactionButton.addEventListener('keypress', function (event) {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    updateViewState('satisfaction')
+                }
+            });
+            submitSurveyButton.addEventListener('click', function () {
+                surveyData.suggestions = suggestionsInput.value;
+                if (window.moengage) {
+                    const eventData = {
+                        satisfaction: surveyData.satisfaction,
+                        suggestions: surveyData.suggestions
+                    };
+                    window.moengage.trackEvent('MOE_RESPONSE_SUBMITTED', eventData, {}, {}, false, true)
+                }
+                updateViewState('thankyou')
+            });
+            submitSurveyButton.addEventListener('keypress', function (event) {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    surveyData.suggestions = suggestionsInput.value;
+                    if (window.moengage) {
+                        const eventData = {
+                            satisfaction: surveyData.satisfaction,
+                            suggestions: surveyData.suggestions
+                        };
+                        window.moengage.trackEvent('MOE_RESPONSE_SUBMITTED', eventData, {}, {}, false, true)
+                    }
+                    updateViewState('thankyou')
+                }
+            });
+            closeThankyouButton.addEventListener('click', function () {
+                if (window.moengage) {
+                    window.moengage.trackClick('close-thankyou-button')
+                }
+                dismissMessage()
+            });
+            closeThankyouButton.addEventListener('keypress', function (event) {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    if (window.moengage) {
+                        window.moengage.trackClick('close-thankyou-button')
+                    }
+                    dismissMessage()
+                }
+            });
+
+            function init() {
+                updateViewState('welcome')
+            }
+            init()
+        }
+    </script>
+</body>
+
+</html>
