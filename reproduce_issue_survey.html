@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Survey</title>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.moengage.com/inapp/html-template13/assets/bootstrap/css/bootstrap.min.css">
+    <!-- Lunar CSS -->
+    <link rel="stylesheet" href="https://cdn.moengage.com/inapp/html-template13/assets/css/lunar.css">
+    <!-- Template CSS -->
+    <link rel="stylesheet" href="https://cdn.moengage.com/inapp/html-template13/assets/css/style.css">
+    <!-- Fonts -->
+    <link rel="stylesheet" href="https://cdn.moengage.com/inapp/html-template13/assets/css/animate.min.css">
+    <link href="https://fonts.googleapis.com/css?family=Work+Sans:600" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css?family=Plus+Jakarta+Sans:300,400,600,700,800,900" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="https://cdn.moengage.com/inapp/html-template13/assets/img/lunar.png" />
+    <link rel="icon" href="https://cdn.moengage.com/inapp/html-template13/assets/img/lunar.png" type="image/png"
+        sizes="16x16">
+</head>
+
+<body class="modal-open">
+    <!-- Modal -->
+    <div class="modal fade modal-bottom-right show" id="demoModal" tabindex="-1" role="dialog"
+        aria-labelledby="demoModal" aria-hidden="true" style="display: block; top: 15px">
+        <div class="modal-dialog  modal-sm" role="document">
+            <div class="modal-content">
+                <img src="https://cdn.moengage.com/inapp/html-template13/assets/img/hero.png" alt="hero">
+                <button type="button" class="close size-sm light close-btn" id='close-btn' data-dismiss="modal"
+                    aria-label="Close"
+                    onclick="document.querySelector('#demoModal').style.display = 'none'; moengage.trackDismiss('close-btn'); moengage.dismissMessage();">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <div class="modal-body px-sm-3 py-sm-3">
+                    <h1 class="main-heading">Help us improve</h1>
+                    <p>You’re awesome for using our product and we want to make it even better for you.</p>
+                    <div class="start-survey">
+                        <button class="btn btn-cstm-light" data-dismiss="modal" aria-label="Close" id='start survey cta'
+                            onclick="document.querySelector('#demoModal').style.display = 'none'; document.querySelector('#screens').style.display = 'block'; moengage.trackClick('start survey cta'); moengage.trackEvent('MOE_RESPONSE_SUBMITTED',{survey_response: document.querySelector('input[name=customRadio]:checked').value, other_product: document.querySelector('textarea').value},{},{},false,true); moengage.setUserAttribute('survey_response', document.querySelector('input[name=customRadio]:checked').value); moengage.dismissMessage();">Start
+                            Survey</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade modal-bottom-right show" id="screens" tabindex="-2" role="dialog" aria-labelledby="screens"
+        aria-hidden="true" style="display: none; top: 15px">
+        <div class="modal-dialog  modal-sm" role="document">
+            <div class="modal-content text-center">
+                <!-- To change HEADER background color change the value of background-color value in style -->
+                <div class="head" style="background-color: #E9B6AD;">
+                    <ul class="pages"></ul>
+                    <button type="button" class="close size-sm light" id='2' data-dismiss="modal" aria-label="Close"
+                        onclick="document.querySelector('#screens').style.display = 'none'; moengage.trackDismiss(2); moengage.dismissMessage();">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body px-sm-3 py-sm-3 screens"></div>
+                <!-- To change BUTTON background color change the value of background-color value in style -->
+                <div class="next-button" style="background-color: #E0836F;">
+                    <button data-dismiss="modal" aria-label="Close">Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Thank You Modal -->
+    <div class="modal fade modal-bottom-right show" id="thankYouModal" tabindex="-1" role="dialog"
+        aria-labelledby="thankYouModal" aria-hidden="true" style="display: none; top: 15px">
+        <div class="modal-dialog modal-sm" role="document">
+            <div class="modal-content">
+                <img src="https://cdn.moengage.com/inapp/html-template13/assets/img/thankyou.png" alt="hero">
+                <div class="modal-body px-sm-3 py-sm-3">
+                    <!-- change text color and size of heading with class main-heading in style.css file -->
+                    <h1 class="main-heading">Thank you!</h1>
+                    <p>Your valuable feedback and opinions will help us to improve our products/services for you.</p>
+                </div>
+                <div class="close-button">
+                    <!-- color of button and text can be changed with btn-cstm-light class in style.css file -->
+                    <button class="btn btn-cstm-light" data-dismiss="modal" aria-label="Close">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!--end content here-->
+    <div id="image"></div>
+    <script src="https://cdn.moengage.com/inapp/html-template13/assets/js/jquery.min.js"></script>
+    <script src="https://cdn.moengage.com/inapp/html-template13/assets/js/popper.min.js"></script>
+    <script src="https://cdn.moengage.com/inapp/html-template13/assets/bootstrap/js/bootstrap.min.js"></script>
+    <!--<script src="assets/js/lunar.js"></script>-->
+    <script>
+        // Your screen's data will go here. You need follow the format. First your need mention screen number, then question you want to show, and then options (options max limit is 5).
+        let data = [
+            {
+                screen: 1,
+                question: `Which of these products do you like?`,
+                options: [
+                    {
+                        image: `https://cdn.moengage.com/inapp/html-template13/assets/img/lunar.png`,
+                        text: `Shoes 0`
+                    },
+                    {
+                        image: `https://cdn.moengage.com/inapp/html-template13/assets/img/lunar.png`,
+                        text: `Shoes 1`
+                    },
+                    {
+                        image: `https://cdn.moengage.com/inapp/html-template13/assets/img/lunar.png`,
+                        text: `Shoes 2`
+                    },
+                    {
+                        image: `https://cdn.moengage.com/inapp/html-template13/assets/img/lunar.png`,
+                        text: `Shoes 3`
+                    },
+                    {
+                        image: `https://cdn.moengage.com/inapp/html-template13/assets/img/lunar.png`,
+                        text: `Shoes 4`
+                    }
+                ]
+            },
+            {
+                screen: 2,
+                question: `What do you like about the products?`,
+                options: `NA`
+            },
+            {
+                screen: 3,
+                question: `How often do you buy on our app?`,
+                options: [
+                    {
+                        text: `Daily`
+                    },
+                    {
+                        text: `Weekly`
+                    },
+                    {
+                        text: `Monthly`
+                    },
+                    {
+                        text: `Once a year`
+                    },
+                    {
+                        text: `Never purchased till now`
+                    }
+                ]
+            },
+            {
+                screen: 4,
+                question: `How would you rate your purchase experience?`,
+                options: [
+                    {
+                        emoji: `😍`,
+                        text: `Extremely Satisfied`
+                    },
+                    {
+                        emoji: `😃`,
+                        text: `Satisfied`
+                    },
+                    {
+                        emoji: `🙂`,
+                        text: `Neither satisfied nor dissatisfied`
+                    },
+                    {
+                        emoji: `😕`,
+                        text: `Dissatisfied`
+                    },
+                    {
+                        emoji: `😟`,
+                        text: `Very dissatisfied`
+                    },
+                ]
+            },
+        ]
+    </script>
+    <script src="https://cdn.moengage.com/inapp/html-template13/assets/js/demo.js"></script>
+    <div class="modal-backdrop show height"></div>
+</body>
+
+</html>

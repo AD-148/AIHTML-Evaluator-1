@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Survey</title>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.moengage.com/inapp/html-template14/assets/bootstrap/css/bootstrap.min.css">
+    <!-- Lunar CSS -->
+    <link rel="stylesheet" href="https://cdn.moengage.com/inapp/html-template14/assets/css/lunar.css">
+    <!-- Template CSS -->
+    <link rel="stylesheet" href="https://cdn.moengage.com/inapp/html-template14/assets/css/style.css">
+    <!-- Fonts -->
+    <link rel="stylesheet" href="https://cdn.moengage.com/inapp/html-template14/assets/css/animate.min.css">
+    <link href="https://fonts.googleapis.com/css?family=Work+Sans:600" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css?family=Plus+Jakarta+Sans:300,400,600,700,800,900" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="https://cdn.moengage.com/inapp/html-template14/assets/img/lunar.png" />
+    <link rel="icon" href="https://cdn.moengage.com/inapp/html-template14/assets/img/lunar.png" type="image/png"
+        sizes="16x16">
+</head>
+
+<body class="modal-open">
+    <!-- Modal -->
+    <div class="modal fade modal-bottom-right show" id="demoModal" tabindex="-1" role="dialog"
+        aria-labelledby="demoModal" aria-hidden="true" style="display: block;">
+        <div class="modal-dialog  modal-sm" role="document">
+            <!-- Color of BACKGROUND can be changed with background color property inside the tag after style value  -->
+            <div class="modal-content" style="background-color: #41D684;">
+                <button type="button" class="close size-sm light close-btn" id='close-btn' data-dismiss="modal"
+                    aria-label="Close"
+                    onclick="document.querySelector('#demoModal').style.display = 'none'; moengage.trackDismiss('close-btn'); moengage.dismissMessage();">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <div class="modal-body px-sm-3 py-sm-3 m-t13">
+                    <p>How has been your experience using our app? Please rate your experience using the slider below.
+                    </p>
+                    <div class="range">
+                        <input type="range" id="range" min="1" max="10" value="1" list="list" />
+                        <!-- Below is the text linked with the numbers. Change value inside option tag -->
+                        <ul id="list">
+                            <li id="1" data-value="Worst">1</li>
+                            <li id="2" data-value="Bad">2</li>
+                            <li id="3" data-value="Normal">3</li>
+                            <li id="4" data-value="Neutral">4</li>
+                            <li id="5" data-value="Good">5</li>
+                            <li id="6" data-value="Better">6</li>
+                            <li id="7" data-value="Best">7</li>
+                            <li id="8" data-value="Bestest">8</li>
+                            <li id="9" data-value="Execellent">9</li>
+                            <li id="10" data-value="Mindblowing">10</li>
+                        </ul>
+                    </div>
+                    <!-- By default value to show as output -->
+                    <p class="output">Select rating</p>
+                    <div class="submit">
+                        <!-- Color of BUTTON and TEXT can be changed with background color and color property inside the tag after style value -->
+                        <a class="btn btn-cstm-light" style="background-color: #333333; color: #41D684;"
+                            data-dismiss="modal" aria-label="Close" id='nps-submit-cta'
+                            onclick="document.querySelector('#demoModal').style.display = 'none'; document.querySelector('#thankModal').style.display = 'block'; moengage.trackClick('nps-submit-cta'); moengage.trackEvent('MOE_RESPONSE_SUBMITTED',{survey_response: document.querySelector('.output').innerText},{},{},false,true); moengage.setUserAttribute('survey_response', document.querySelector('.output').innerText);">Submit</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Thank you Modal -->
+    <div class="modal fade modal-bottom-right show" id="thankModal" tabindex="-1" role="dialog"
+        aria-labelledby="thankModal" aria-hidden="true" style="display: none;">
+        <div class="modal-dialog  modal-sm" role="document">
+            <div class="modal-content" style="background-color: #41D684;">
+                <div class="modal-body px-sm-3 py-sm-3">
+                    <h3>Thank you for your response!</h3>
+                    <p>Your valuable feedback and opinions will help us to improve our products/services for you.</p>
+                    <div class="submit">
+                        <!-- Color of BUTTON and TEXT can be changed with background color and color property inside the tag after style value -->
+                        <a class="btn btn-cstm-light" style="background-color: #71717133; color: #333333;"
+                            data-dismiss="modal" aria-label="Close"
+                            onclick="document.querySelector('#thankModal').style.display = 'none'; moengage.dismissMessage();">Close</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!--end content here-->
+    <script>
+        let rangeInput = document.querySelector('#range');
+        rangeInput.addEventListener('input', (e) => {
+            document.querySelector('.output').innerText = document.querySelector('#list').children[e.target.value - 1].dataset.value;
+        })
+    </script>
+    <script src="https://cdn.moengage.com/inapp/html-template14/assets/js/jquery.min.js"></script>
+    <script src="https://cdn.moengage.com/inapp/html-template14/assets/js/popper.min.js"></script>
+    <script src="https://cdn.moengage.com/inapp/html-template14/assets/bootstrap/js/bootstrap.min.js"></script>
+    <!--<script src="assets/js/lunar.js"></script>-->
+    <script src="https://cdn.moengage.com/inapp/html-template14/assets/js/demo.js"></script>
+    <div class="modal-backdrop show height"></div>
+</body>
+
+</html>
