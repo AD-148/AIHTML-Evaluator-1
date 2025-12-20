@@ -263,295 +263,187 @@ class AdvancedAnalyzer:
                     self._log_trace("art", f"Visual Check Complete. DNA extracted: {len(dna['modern_css'])} modern features.")
 
                     # --- PHASE D: MOBILE SIMULATION (Resize Page) ---
-                    # 1. Portrait
-                    self._log_section("4. MOBILE SIMULATION & INTERACTION")
+                    # 1. Portrait & Dynamic Inteaction Loop
+                    self._log_section("4. MOBILE SIMULATION & INTERACTION (Dynamic Loop)")
                     try:
                         self._log_trace("iphone", "Resizing Viewport to iPhone 12 (390x844)...")
                         await page.set_viewport_size({'width': 390, 'height': 844})
                         await page.wait_for_timeout(200)
-                        vp = await page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
-                        self.logs["mobile_logs"].append(f"Viewport Verified: {vp['width']}x{vp['height']}")
                         
-                        # Interactive Elements Test (Buttons, Links, Inputs, Custom Interactions)
-                        # Specific: img/div with onclick, role=button, scratch classes, canvas
-                        # Interactive Elements Test (Buttons, Links, Inputs, Custom Interactions)
-                        # Specific: img/div with onclick, role=button, scratch classes, canvas, role=slider
-                        elements = page.locator("button, a, input, textarea, select, [role='button'], [role='slider'], img[onclick], div[onclick], .scratchpad, .scratch-card, canvas")
-                        count = await elements.count()
-                        self.logs["mobile_logs"].append(f"Found {count} interactive targets.")
-                        self._log_trace("mag", f"[INFO] Mobile: Found {count} interactive elements to test.")
+                        # --- DYNAMIC INTERACTION LOOP ---
+                        # We will perform up to 10 "Rounds" of interaction. 
+                        # A Round consists of scanning the page, picking the best action, and executing it.
+                        # If an action causes a UI update (DOM change), we start a NEW Round (re-scan).
+                        
+                        executed_actions = set() # Track signature of executed elements to avoid loops
+                        max_rounds = 10
+                        current_round = 0
+                        
+                        while current_round < max_rounds:
+                            self._log_trace("arrows_counterclockwise", f"[INFO] Mobile: Starting Interaction Round #{current_round + 1}...")
+                            
+                            # 1. SCAN: Find all visible interactive elements
+                            # We use a broad selector to catch everything
+                            elements = page.locator("button, a, input, textarea, select, [role='button'], [role='slider'], img[onclick], div[onclick], .scratchpad, .scratch-card, canvas")
+                            count = await elements.count()
+                            
+                            if count == 0:
+                                self._log_trace("stop_sign", "[INFO] Mobile: No interactive elements found. Stopping.")
+                                break
 
-                        primary_actions = []
-                        deferred_actions = []
-
-                        for i in range(count): # Iterate ALL interactive elements
-                            el = elements.nth(i)
-                            if await el.is_visible():
+                            # 2. ANALYZE & PRIORITIZE candidates
+                            candidates = []
+                            for i in range(count):
+                                el = elements.nth(i)
+                                if not await el.is_visible(): continue
+                                
                                 try:
+                                    # Extract attributes for signature and heuristics
                                     tag = await el.evaluate("el => el.tagName.toLowerCase()")
                                     id_attr = await el.evaluate("el => el.id") or ""
-                                    class_attr = await el.evaluate("el => el.className") or ""
-                                    
-                                    # Create a descriptive identifier for the log
-                                    el_ident = tag
-                                    if id_attr:
-                                        el_ident += f" id='{id_attr}'"
-                                    elif class_attr:
-                                        el_ident += f" class='{class_attr.split()[0]}'" # Just first class for brevity
-
-                                    text = await el.text_content()
-                                    text = text.strip()[:20] if text else "logging-in"
-                                    
-                                    # Log Intent - REMOVED to avoid duplicate with Execution Phase
-                                    # self._log_trace("point_right", f"[INFO] Mobile: Approaching target #{i+1} (<{el_ident}> '{text}')...")
-                                    
-                                    # Scroll info
-                                    # await el.scroll_into_view_if_needed() 
-                                    # Move scroll to execution phase to avoid interacting/moving things during inspection
-                                    
-                                    inputType = await el.evaluate("el => el.getAttribute('type')")
-                                    name_attr = await el.evaluate("el => el.getAttribute('name')") or ""
-                                    aria_label = await el.evaluate("el => el.getAttribute('aria-label')") or ""
+                                    text = (await el.text_content() or "").strip()[:50]
                                     cls_attr = await el.evaluate("el => el.getAttribute('class')") or ""
+                                    inputType = await el.evaluate("el => el.getAttribute('type')") or ""
+                                    name_attr = await el.evaluate("el => el.getAttribute('name')") or ""
+                                    aria = await el.evaluate("el => el.getAttribute('aria-label')") or ""
+                                    role = await el.evaluate("el => el.getAttribute('role')") or ""
                                     
-                                    # Normalize strings for heuristics
-                                    combined_desc = (text + " " + cls_attr + " " + aria_label + " " + name_attr).lower()
-
-                                    # Check if this is a "Close" action (heuristic)
-                                    is_close_action = False
-                                    if "close" in combined_desc or "dismiss" in combined_desc:
-                                         if id_attr == "close-btn" or "close" in class_attr.lower():
-                                              is_close_action = True
+                                    # Create Unique Signature
+                                    # We include round number ONLY for inputs (allow re-filling in new rounds if cleared?) 
+                                    # No, safer to just track unique element. But if page reloads, IDs might persist.
+                                    # Let's use specific signature:
+                                    signature = f"{tag}|{id_attr}|{text}|{cls_attr}|{name_attr}"
                                     
-                                    action_data = {
-                                        "index": i,
+                                    if signature in executed_actions:
+                                        continue # Skip already handled elements
+                                        
+                                    # Heuristics for Prioritization
+                                    score = 0
+                                    
+                                    # HIGH PRIORITY: Unfilled Inputs (Radio, Checkbox, Text)
+                                    if tag in ['input', 'textarea', 'select']:
+                                        score += 10
+                                        if inputType in ['radio', 'checkbox']: 
+                                             # Prioritize radio/box to ensure state is set before submitting
+                                             score += 2 
+                                    
+                                    # HIGH PRIORITY: "Next" / "Submit" / "Start" Buttons
+                                    combined_text = (text + " " + id_attr + " " + cls_attr + " " + aria).lower()
+                                    if any(w in combined_text for w in ['next', 'submit', 'continue', 'proceed', 'start', 'ok', 'yes']):
+                                        score += 5
+                                        
+                                    # MEDIUM PRIORITY: Standard Buttons
+                                    if tag == 'button' or role == 'button':
+                                        score += 2
+                                        
+                                    # LOW PRIORITY: "Close" / "Cancel" / "Back" (Avoid ending flow early)
+                                    if any(w in combined_text for w in ['close', 'cancel', 'back', 'dismiss', 'prev']):
+                                        score -= 10
+                                        
+                                    candidates.append({
                                         "element": el,
+                                        "score": score,
+                                        "signature": signature,
                                         "tag": tag,
-                                        "id_attr": id_attr,
-                                        "class_attr": class_attr,
+                                        "type": inputType,
                                         "text": text,
-                                        "el_ident": el_ident,
-                                        "inputType": inputType,
-                                        "combined_desc": combined_desc,
-                                        "name_attr": name_attr,
-                                        "is_close": is_close_action
-                                    }
+                                        "desc": f"<{tag} id='{id_attr}'> '{text}'"
+                                    })
                                     
-                                    if is_close_action:
-                                        deferred_actions.append(action_data)
-                                    else:
-                                        primary_actions.append(action_data)
-
                                 except Exception as e:
-                                    logger.warning(f"Error inspecting element #{i}: {e}")
-                            else:
-                                 # Element not visible during inspection
-                                 pass 
+                                    pass
 
-                        self._log_trace("mag", f"[INFO] Mobile: Plan -> {len(primary_actions)} Primary, {len(deferred_actions)} Deferred (Close).")
-
-                        # PHASE D.2: EXECUTE ACTIONS: Primary First, then Deferred (Closing)
-                        all_actions = primary_actions + deferred_actions
-                        
-                        for action in all_actions:
-                            i = action["index"]
-                            el = action["element"]
-                            tag = action["tag"]
-                            el_ident = action["el_ident"]
-                            inputType = action["inputType"]
-                            combined_desc = action["combined_desc"]
-                            name_attr = action["name_attr"]
-                            text = action["text"]
+                            # Sort Candidates by Score (Highest First)
+                            candidates.sort(key=lambda x: x['score'], reverse=True)
                             
-                            if not await el.is_visible():
-                                 self._log_trace("ghost", f"[INFO] Mobile: Target #{i+1} (<{el_ident}>) is no longer visible. Skipping.")
-                                 continue
-
-                            try:
-                                # Log Intent
-                                self._log_trace("point_right", f"[INFO] Mobile: Approaching target #{i+1} (<{el_ident}> '{text}')...")
+                            if not candidates:
+                                self._log_trace("checkered_flag", "[INFO] Mobile: No new candidates to interact with. Stopping.")
+                                break
                                 
-                                # Scroll into view
-                                await el.scroll_into_view_if_needed()
-
-                                # Determine Interaction Type
-                                if tag in ['input', 'textarea'] and inputType not in ['button', 'submit', 'checkbox', 'radio', 'range', 'color']:
-                                    # Smart Input Filling
-                                    fill_value = "test"
-                                    log_action = "Typed 'test'"
-                                    
-                                    if "email" in inputType or "email" in name_attr.lower():
-                                        fill_value = "test@example.com"
-                                        log_action = "Typed valid email"
-                                    elif "tel" in inputType or "phone" in name_attr.lower() or "mobile" in name_attr.lower():
-                                        fill_value = "9876543210"
-                                        log_action = "Typed phone number"
-                                    elif inputType == "number":
-                                        fill_value = "10"
-                                        log_action = "Typed number"
-                                    elif inputType == "date":
-                                        fill_value = "2025-01-01"
-                                        log_action = "Typed date"
-                                    elif inputType == "url":
-                                        fill_value = "https://example.com"
-                                        log_action = "Typed URL"
-                                    elif "search" in inputType:
-                                        fill_value = "test query"
-                                        log_action = "Typed search query"
-                                    
-                                    await el.fill(fill_value)
-                                    self.logs["mobile_logs"].append(f"Target #{i+1} ({tag}): {log_action} ('{fill_value}').")
-                                    self._log_trace("keyboard", f"[PASS] Mobile: {log_action} into <{tag} type='{inputType}'>.")
+                            # 3. EXECUTE: Try candidates one by one until a UI Update happens
+                            round_progressed = False
+                            
+                            for cand in candidates:
+                                el = cand['element']
+                                sig = cand['signature']
+                                desc = cand['desc']
+                                tag = cand['tag']
+                                itype = cand['type']
                                 
-                                elif "scratch" in combined_desc or "reveal" in combined_desc or "scratchpad" in action["class_attr"].lower():
-                                    # Scratch Card Gesture Simulation
-                                    self._log_trace("point_up", f"[INFO] Mobile: Detected 'Scratch' intent on Target #{i+1}.")
-                                    box = await el.bounding_box()
-                                    if box:
-                                        center_x = box['x'] + box['width'] / 2
-                                        center_y = box['y'] + box['height'] / 2
-                                        width = box['width']
-                                        height = box['height']
-                                        
-                                        # Simulate a vigorous scratch (Zig-Zag across the area)
-                                        await page.mouse.move(center_x, center_y)
-                                        await page.mouse.down()
-                                        
-                                        # Scratch multiple times to ensure coverage
-                                        for s in range(10):
-                                            offset_x = (width * 0.4) if s % 2 == 0 else -(width * 0.4)
-                                            offset_y = (height * 0.4) * (s / 10.0) - (height * 0.2)
-                                            await page.mouse.move(center_x + offset_x, center_y + offset_y, steps=5)
-                                        
-                                        await page.mouse.up()
-                                        self.logs["mobile_logs"].append(f"Target #{i+1}: Performed Robust Scratch Gesture.")
-                                        
-                                        # Wait for UI update (winning screen)
-                                        await page.wait_for_timeout(3000) 
-                                        
-                                        self._log_trace("sparkles", f"[PASS] Mobile: Performed Scratch Gesture on <{tag}> and waited for result.")
+                                self._log_trace("point_right", f"[INFO] Mobile: Round {current_round+1} Action -> interacting with {desc} (Score: {cand['score']})")
+                                
+                                # Capture State
+                                html_before = await page.content()
+                                url_before = page.url
+                                
+                                # Interact
+                                try:
+                                    if tag in ['input', 'textarea'] and itype not in ['button', 'submit', 'checkbox', 'radio', 'range', 'color']:
+                                        # Fill Input
+                                        val = "test_value"
+                                        await el.fill(val)
+                                        self.logs["mobile_logs"].append(f"Round {current_round+1}: Filled {desc} with '{val}'")
+                                        # Input filling usually doesn't change DOM significantly enough to force a re-scan immediately,
+                                        # UNLESS it's a search box. We mark it executed and continue to next candidate IN THIS ROUND usually,
+                                        # BUT our logic is "One Action Per Round" to be safe.
+                                        # Actually, for inputs, we should probably allow staying in the round.
+                                        # implementation simplification: Treat fill as an action, mark executed. 
+                                        # If DOM didn't change, loop continues to next candidate? 
+                                        # NO. The "Interaction Loop" is: Scan -> Pick BEST -> Do it.
+                                        # If we fill name, we want to then click submit.
+                                        # So if DOM didn't change, we SHOULD proceed to next candidate.
+                                    elif itype in ['checkbox', 'radio']:
+                                        await el.click(force=True)
+                                        self.logs["mobile_logs"].append(f"Round {current_round+1}: Toggled {desc}")
                                     else:
-                                         self.logs["mobile_logs"].append(f"Target #{i+1}: Scratch failed (No Bounding Box).")
-
-                                elif "spin" in combined_desc or "wheel" in combined_desc:
-                                    # Spin Wheel -> Tap with logging
-                                    self._log_trace("point_up", f"[INFO] Mobile: Detected 'Spin' intent on Target #{i+1}.")
-                                    await el.tap(timeout=2000)
-                                    self.logs["mobile_logs"].append(f"Target #{i+1}: Spun the Wheel.")
-                                    self._log_trace("dart", f"[PASS] Mobile: Tapped Scale/Spin/Wheel element.")
-                                
-                                    self._log_trace("dart", f"[PASS] Mobile: Tapped Scale/Spin/Wheel element.")
-                                
-                                elif inputType in ["radio", "checkbox"]:
-                                    # Specialized Handling for Radio/Checkbox (often hidden in frameworks like Bootstrap)
-                                    self._log_trace("ballot_box_with_check", f"[INFO] Mobile: Checkbox/Radio detected ({inputType}). Attempting robust interaction.")
+                                        # Click/Tap
+                                        await el.click(timeout=3000)
+                                        self.logs["mobile_logs"].append(f"Round {current_round+1}: Clicked {desc}")
                                     
-                                    # 1. Try to toggle via LABEL (Most reliable for hidden inputs)
-                                    el_id = await el.get_attribute("id")
-                                    label = None
-                                    if el_id:
-                                        label = page.locator(f"label[for='{el_id}']")
+                                    executed_actions.add(sig)
                                     
-                                    # Check state using JS property (more reliable than attribute)
-                                    was_checked = await el.is_checked()
+                                    # Wait for reaction
+                                    await page.wait_for_timeout(1000)
                                     
-                                    interaction_success = False
-                                    try:
-                                        if label and await label.is_visible():
-                                            await label.tap(timeout=1500)
-                                            self.logs["mobile_logs"].append(f"Target #{i+1}: Tapped Label.")
-                                        else:
-                                            # Fallback to direct force click
-                                            await el.click(force=True, timeout=1500)
-                                            self.logs["mobile_logs"].append(f"Target #{i+1}: Force Clicked Input.")
-                                        
-                                        interaction_success = True
-                                    except Exception as e:
-                                        self.logs["mobile_logs"].append(f"Target #{i+1}: Interaction Failed ({e}).")
-                                        
-                                    await page.wait_for_timeout(300)
-                                    is_checked = await el.is_checked()
-                                    
-                                    if was_checked != is_checked:
-                                         state = "Checked" if is_checked else "Unchecked"
-                                         self._log_trace("check", f"[PASS] Mobile Interaction: Toggled <{tag} type='{inputType}'> to {state}.")
-                                         self.logs["mobile_logs"].append(f"Target #{i+1}: State Changed to {state}.")
-                                    elif interaction_success:
-                                         # Sometimes state doesn't toggle (e.g. radio button already checked), but interaction worked.
-                                         self._log_trace("warning", f"[INFO] Mobile Interaction: Tapped <{tag}> but state is unchanged (Already {was_checked}?).")
-                                    else:
-                                         self._log_trace("x", f"[FAIL] Mobile Interaction: Failed to toggle <{tag}>.")
-
-                                    self._log_trace("check", f"[PASS] Mobile Interaction: Adjusted <{tag} type='range'>.")
-
-                                elif inputType == "range" or (await el.get_attribute("role")) == "slider":
-                                    # Range Slider Interaction (Input or Custom Div)
-                                    self._log_trace("control_knobs", f"[INFO] Mobile: Slider detected. Adjusting value.")
-                                    
-                                    # Try standard fill first (works for inputs)
-                                    try:
-                                        await el.fill("10")
-                                    except:
-                                        pass
-                                        
-                                    # Fallback evaluation for custom listeners (both input and div based sliders often use these events)
-                                    await el.evaluate("(e) => { e.value = 10; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); }")
-                                    
-                                    # Some custom sliders (e.g. noUiSlider) need click simulation at a specific offset
-                                    try:
-                                        box = await el.bounding_box()
-                                        if box:
-                                            await page.mouse.click(box["x"] + box["width"] * 0.5, box["y"] + box["height"] * 0.5)
-                                    except:
-                                        pass
-
-                                    self.logs["mobile_logs"].append(f"Target #{i+1}: Adjusted Slider.")
-                                    self._log_trace("check", f"[PASS] Mobile Interaction: Adjusted Slider <{tag}>.")
-
-                                else:
-                                    # Standard Click/Tap interaction for Buttons/Links/TextInputs
-                                    # Capture State Before
-                                    url_before = page.url
-                                    html_before = await page.content()
-                                    
-                                    # Tap with INCREASED TIMEOUT (2000ms) and FALLBACK
-                                    try:
-                                        await el.tap(timeout=2000)
-                                    except Exception as tap_err:
-                                        # If tap times out (e.g. hidden input), try FORCE CLICK
-                                        if "Timeout" in str(tap_err) or "visible" in str(tap_err):
-                                             self._log_trace(f"[INFO] Mobile: Tap timed out on <{el_ident}>. Retrying with Force Click...")
-                                             await el.click(force=True, timeout=2000)
-                                             self.logs["mobile_logs"].append(f"Target #{i+1}: Retried with Force Click.")
-                                        else:
-                                             raise tap_err
-
-                                    await page.wait_for_timeout(600) # Wait for JS/Animation
-                                    
-                                    # Capture State After
-                                    url_after = page.url
+                                    # Check State
                                     html_after = await page.content()
+                                    url_after = page.url
                                     
-                                    # Verify State Change
                                     if url_before != url_after:
-                                         self._log_trace(f"[PASS] Mobile Navigation: Tapped <{el_ident}> -> Moved to {url_after}.")
-                                         self.logs["mobile_logs"].append(f"Target #{i+1}: Triggered Navigation.")
+                                        self._log_trace("rocket", f"[PASS] Mobile: Navigation triggered! ({url_before} -> {url_after})")
+                                        round_progressed = True
+                                        break # BREAK CANDIDATE LOOP -> Start Next Round
                                     elif html_before != html_after:
-                                         self._log_trace(f"[PASS] Mobile Interaction: Tapped <{el_ident}> -> UI Updated.")
-                                         self.logs["mobile_logs"].append(f"Target #{i+1}: Triggered Visual Update.")
+                                        # Simple heuristic: content length changed by more than 10 chars?
+                                        # Or just inequality.
+                                        self._log_trace("sparkles", f"[PASS] Mobile: UI Update detected after action.")
+                                        round_progressed = True
+                                        break # BREAK CANDIDATE LOOP -> Start Next Round
                                     else:
-                                         # No change detected -> Likely broken listener
-                                         self._log_trace(f"[FAIL] Mobile Interaction: Tapped <{el_ident}> -> No response (DOM/URL unchanged).")
-                                         self.logs["mobile_logs"].append(f"Target #{i+1}: Unresponsive (No DOM/URL change).")
-                                         
-                            except Exception as e:
-                                self.logs["mobile_logs"].append(f"Target #{i+1}: FAILED INTERACTION. Error: {e}")
-                                self._log_trace(f"[FAIL] Mobile Interaction: Error tapping target #{i+1}. Reason: {str(e)[:100]}")
-                        
-                        self._log_trace("checkered_flag", "[INFO] Mobile: Interaction Loop Finished.")
+                                        # No significant change. 
+                                        # For inputs, this is expected. 
+                                        # For buttons, it might be a failure or just a "toast" message.
+                                        # We continue to the next candidate in this current round priority list.
+                                        self._log_trace("ghost", f"[INFO] Mobile: No UI change detected. Trying next candidate...")
+                                        
+                                except Exception as e:
+                                     # Log specific JS error if it was a runtime crash
+                                     self._log_trace("warning", f"[WARN] Mobile: Interaction failed: {e}")
+                                     # Don't mark as executed if failed? Or do?
+                                     # Mark as executed to avoid infinite retry loop on broken element
+                                     executed_actions.add(sig)
 
+                            if round_progressed:
+                                current_round += 1
+                                # Loop back to SCAN
+                            else:
+                                # We tried all candidates and nothing progressed the UI.
+                                # This usually means we reached the end of the flow.
+                                self._log_trace("checkered_flag", "[INFO] Mobile: No actions triggered a UI update. Flow complete.")
+                                break 
+                                
                     except Exception as loop_err:
-                        self._log_trace(f"[FAIL] Mobile Loop Crashed: {loop_err}")
+                        self._log_trace("boom", f"[FAIL] Mobile Loop Crashed: {loop_err}")
 
                     # 2. Landscape check
                     try:
