@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>SDK Stub Test</title>
+</head>
+
+<body>
+    <h1>SDK Handling Test</h1>
+
+    <!-- Case 1: Missing SDK (Should Pass after Fix) -->
+    <button id="sdk-btn" onclick="moengage.trackClick('test'); document.body.style.backgroundColor='green'">
+        Test SDK Call
+    </button>
+
+    <!-- Case 2: Real Logic Error (Should always FAIL) -->
+    <button id="broken-btn" onclick="console.log(null.value)">
+        Test Real Error
+    </button>
+</body>
+
+</html>

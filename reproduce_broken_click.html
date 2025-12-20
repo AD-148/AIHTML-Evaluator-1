@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feedback Survey</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --color-primary-main: #0D6EFD;
+        }
+
+        .hidden {
+            display: none !important
+        }
+    </style>
+</head>
+
+<body class="bg-black bg-opacity-50 flex items-center justify-center p-4">
+    <div id="main-container"
+        class="relative rounded-lg shadow-xl w-full max-w-lg portrait:aspect-[9/16] landscape:aspect-video md:aspect-auto md:max-h-[90vh] overflow-hidden bg-white">
+        <button id="close-button"
+            class="absolute top-4 right-4 z-50 w-8 h-8 flex items-center justify-center rounded-full bg-gray-200 hover:bg-gray-300 text-gray-700 text-2xl leading-none transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-gray-400"
+            tabindex="0" aria-label="Close dialog">&times;</button>
+        <div id="screen-1" class="h-full w-full overflow-y-auto p-6 landscape:p-8">
+            <div class="h-full flex flex-col items-center justify-center space-y-6 landscape:space-y-4">
+                <h1 class="text-2xl landscape:text-xl font-bold text-center text-gray-900">Are you finding what you're
+                    looking for on our site today?</h1>
+                <div class="flex flex-col w-full space-y-4 landscape:space-y-3 max-w-sm"><button id="yes-button"
+                        class="w-full py-3 px-6 rounded-lg font-medium text-white transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        style="background-color:var(--color-primary-main)" tabindex="0">Yes, I am!</button><button
+                        id="no-button"
+                        class="w-full py-3 px-6 rounded-lg font-medium text-white transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                        style="background-color:var(--color-secondary-main)" tabindex="0">No, not really.</button></div>
+            </div>
+        </div>
+        <div id="screen-2" class="hidden h-full w-full overflow-y-auto p-6 landscape:p-8">
+            <div class="h-full flex flex-col items-center justify-center space-y-6 landscape:space-y-4">
+                <h1 id="thank-you-title">Thank You</h1>
+            </div>
+        </div>
+    </div>
+    <script>
+        // BROKEN SCRIPT FROM USER
+        window.onload = function () {
+            const screen1 = document.getElementById('screen-1');
+            const screen2 = document.getElementById('screen-2');
+            const yesButton = document.getElementById('yes-button');
+
+            function handleYesClick() {
+                // This syntax error (newline in string) breaks the script
+                if (window.moengage) {
+                    window.moengage.trackEvent('MOE_RESPONSE_SUBMITTED', {
+                        response: 'yes',
+                        question: 'Are you finding what you'
+                                    re looking
+                                    for on our site today? '},{},{},false,true)}} // BROKEN
+                                    
+                function init() { yesButton.addEventListener('click', handleYesClick); }
+                
+                init();
+                    }
+    </script>
+</body>
+
+</html>

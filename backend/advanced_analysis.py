@@ -141,14 +141,17 @@ class AdvancedAnalyzer:
                     # INJECT MOCK SDK for "MoEngage" to prevent Runtime Errors on click
                     await page.add_init_script("""
                         window.moengage = {
-                            trackDismiss: () => console.log('Mock MoEngage: trackDismiss'),
-                            dismissMessage: () => console.log('Mock MoEngage: dismissMessage'),
-                            trackClick: () => console.log('Mock MoEngage: trackClick'),
-                            trackEvent: () => console.log('Mock MoEngage: trackEvent'),
-                            setUserAttribute: () => console.log('Mock MoEngage: setUserAttribute'),
-                            setFirstName: () => console.log('Mock MoEngage: setFirstName'),
-                            setEmailId: () => console.log('Mock MoEngage: setEmailId')
+                            trackDismiss: (id) => console.log('[MockSDK] MoEngage: trackDismiss', id),
+                            dismissMessage: () => console.log('[MockSDK] MoEngage: dismissMessage'),
+                            trackClick: (evt) => console.log('[MockSDK] MoEngage: trackClick', evt),
+                            trackEvent: (name, data) => console.log('[MockSDK] MoEngage: trackEvent', name, data),
+                            setUserAttribute: (key, val) => console.log('[MockSDK] MoEngage: setUserAttribute', key, val),
+                            setFirstName: (name) => console.log('[MockSDK] MoEngage: setFirstName', name),
+                            setEmailId: (email) => console.log('[MockSDK] MoEngage: setEmailId', email)
                         };
+                        
+                        // Fallback for global usage if any
+                        window.trackEvent = (name) => console.log('[MockSDK] Global trackEvent:', name);
                         
                         // Shim document.write using Object.defineProperty to be extra aggressive
                         Object.defineProperty(document, 'write', {
@@ -655,6 +658,22 @@ class AdvancedAnalyzer:
             lines.append(f"- [WARN] {item}")
             
         return "\n".join(lines)
+
+    async def _inject_sdk_stubs(self, page):
+        """Injects mock objects for common SDKs to prevent ReferenceErrors during testing."""
+        await page.add_init_script("""
+            // Mock MoEngage SDK
+            window.moengage = {
+                trackClick: function(evt) { console.log('[MockSDK] moengage.trackClick called:', evt); },
+                trackEvent: function(name, data) { console.log('[MockSDK] moengage.trackEvent called:', name, data); },
+                setUserAttribute: function(key, val) { console.log('[MockSDK] moengage.setUserAttribute called:', key, val); },
+                dismissMessage: function() { console.log('[MockSDK] moengage.dismissMessage called'); },
+                trackDismiss: function(id) { console.log('[MockSDK] moengage.trackDismiss called:', id); }
+            };
+            
+            // Mock Base Common Functions if needed
+            window.trackEvent = function(name) { console.log('[MockSDK] Global trackEvent called:', name); };
+        """)
 
     async def _get_smart_input_value(self, element) -> str:
         """Determines a context-aware test value for an input element."""
