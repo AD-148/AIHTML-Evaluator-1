@@ -332,13 +332,25 @@ class AdvancedAnalyzer:
                                     if any(w in combined_text for w in ['next', 'submit', 'continue', 'proceed', 'start', 'ok', 'yes']):
                                         score += 5
                                         
+                                    
                                     # MEDIUM PRIORITY: Standard Buttons
                                     if tag == 'button' or role == 'button':
                                         score += 2
                                         
                                     # LOW PRIORITY: "Close" / "Cancel" / "Back" (Avoid ending flow early)
-                                    if any(w in combined_text for w in ['close', 'cancel', 'back', 'dismiss', 'prev']):
-                                        score -= 10
+                                    # We want these STRICTLY LAST.
+                                    # Check data-dismiss attribute too (not captured above, let's just check combined_text if possible or re-eval)
+                                    # Actually, let's grab it fresh or rely on class/aria.
+                                    # "close" in class is very common.
+                                    
+                                    is_close = False
+                                    if any(w in combined_text for w in ['close', 'cancel', 'back', 'dismiss', 'prev', 'skip', 'no, thanks']):
+                                        is_close = True
+                                    elif text in ['x', '×', '✕', '+']: # + often verified as close in rotated css? No, usually X.
+                                        is_close = True
+                                    
+                                    if is_close:
+                                        score -= 50 # Massive penalty to ensure it's bottom of list
                                         
                                     candidates.append({
                                         "element": el,
@@ -378,27 +390,53 @@ class AdvancedAnalyzer:
                                 
                                 # Interact
                                 try:
-                                    if tag in ['input', 'textarea'] and itype not in ['button', 'submit', 'checkbox', 'radio', 'range', 'color']:
+                                    if tag == 'select':
+                                        # Handle Select Dropdowns
+                                        # Use heuristics to pick a value? Or just first option.
+                                        opts = await el.locator('option').all_text_contents()
+                                        if opts:
+                                            # Pick the second option if available (usually first is "Select...")
+                                            val = opts[1] if len(opts) > 1 else opts[0]
+                                            await el.select_option(label=val)
+                                            self.logs["mobile_logs"].append(f"Round {current_round+1}: Selected '{val}' in {desc}")
+                                            self._log_trace("ballot_box_with_check", f"[PASS] Mobile: Selected option '{val}' in <select>.")
+                                            # Mark as "Action Taken" but don't force break round unless UI updates
+                                        else:
+                                             self._log_trace("warning", f"[WARN] Mobile: <select> has no options.")
+
+                                    elif tag in ['input', 'textarea'] and itype not in ['button', 'submit', 'checkbox', 'radio', 'range', 'color']:
                                         # Fill Input
                                         val = "test_value"
                                         await el.fill(val)
                                         self.logs["mobile_logs"].append(f"Round {current_round+1}: Filled {desc} with '{val}'")
-                                        # Input filling usually doesn't change DOM significantly enough to force a re-scan immediately,
-                                        # UNLESS it's a search box. We mark it executed and continue to next candidate IN THIS ROUND usually,
-                                        # BUT our logic is "One Action Per Round" to be safe.
-                                        # Actually, for inputs, we should probably allow staying in the round.
-                                        # implementation simplification: Treat fill as an action, mark executed. 
-                                        # If DOM didn't change, loop continues to next candidate? 
-                                        # NO. The "Interaction Loop" is: Scan -> Pick BEST -> Do it.
-                                        # If we fill name, we want to then click submit.
-                                        # So if DOM didn't change, we SHOULD proceed to next candidate.
+                                        self._log_trace("keyboard", f"[PASS] Mobile: Filled Input {desc} with '{val}'.")
+                                        # Input filling is a PASS. Even if UI doesn't update, we made progress.
+                                        
                                     elif itype in ['checkbox', 'radio']:
-                                        await el.click(force=True)
-                                        self.logs["mobile_logs"].append(f"Round {current_round+1}: Toggled {desc}")
+                                        try:
+                                            await el.click(force=True, timeout=1500)
+                                            self.logs["mobile_logs"].append(f"Round {current_round+1}: Toggled {desc}")
+                                            self._log_trace("check", f"[PASS] Mobile: Toggled {desc}.")
+                                        except:
+                                            # Try label?
+                                            id_val = await el.get_attribute("id")
+                                            if id_val:
+                                                await page.locator(f"label[for='{id_val}']").click(force=True, timeout=1500)
+                                                self._log_trace("check", f"[PASS] Mobile: Toggled Label for {desc}.")
+
                                     else:
-                                        # Click/Tap
-                                        await el.click(timeout=3000)
-                                        self.logs["mobile_logs"].append(f"Round {current_round+1}: Clicked {desc}")
+                                        # Click/Tap (Buttons, Links)
+                                        # Retry Logic for Overlays/Backdrops
+                                        try:
+                                            await el.click(timeout=2000)
+                                            self.logs["mobile_logs"].append(f"Round {current_round+1}: Clicked {desc}")
+                                        except Exception as click_err:
+                                            if "intersects pointer events" in str(click_err) or "visible" in str(click_err) or "Timeout" in str(click_err):
+                                                self._log_trace("warning", f"[INFO] Mobile: Click intercepted/timed out on {desc}. Retrying with FORCE CLICK.")
+                                                await el.click(force=True, timeout=2000)
+                                                self.logs["mobile_logs"].append(f"Round {current_round+1}: Force-Clicked {desc}")
+                                            else:
+                                                raise click_err
                                     
                                     executed_actions.add(sig)
                                     
@@ -422,14 +460,11 @@ class AdvancedAnalyzer:
                                     else:
                                         # No significant change. 
                                         # For inputs, this is expected. 
-                                        # For buttons, it might be a failure or just a "toast" message.
-                                        # We continue to the next candidate in this current round priority list.
-                                        self._log_trace("ghost", f"[INFO] Mobile: No UI change detected. Trying next candidate...")
+                                        self._log_trace("ghost", f"[INFO] Mobile: Action successful, but no UI change detected. Continuing round...")
                                         
                                 except Exception as e:
                                      # Log specific JS error if it was a runtime crash
                                      self._log_trace("warning", f"[WARN] Mobile: Interaction failed: {e}")
-                                     # Don't mark as executed if failed? Or do?
                                      # Mark as executed to avoid infinite retry loop on broken element
                                      executed_actions.add(sig)
 
