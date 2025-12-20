@@ -4,7 +4,7 @@ import asyncio
 import logging
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
-from openai import AsyncOpenAI
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 try:
@@ -217,7 +217,7 @@ Format for 'rationale':
 """
 
 async def analyze_chat(messages: List[dict]) -> EvaluationResult:
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     
     # 1. EXTRACT HTML FROM CONVERSATION
     last_html = ""
@@ -228,13 +228,13 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
             break
     
     # MOCK/VALIDATION Check
-    if not api_key or not api_key.strip().startswith("sk-"):
-        # return _get_mock_result()
-        logger.warning("Mock Mode: Proceeding with Local Analysis before returning mock.")
-        api_key = None # Force to None so later checks work correctly
+    if not api_key:
+        logger.warning("Mock Mode: Proceeding with Local Analysis before returning mock (Missing GEMINI_API_KEY).")
+        api_key = None 
 
-    # client = AsyncOpenAI(api_key=api_key) # MOVED DOWN
-
+    # Configure Gemini
+    if api_key:
+        genai.configure(api_key=api_key)
 
     # 2. RUN ADVANCED ANALYSIS
     context_access = ""
@@ -264,20 +264,19 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
     # 3. RUN MULTI-AGENT EVALUATION (5 Agents)
     if not api_key:
         mock = _get_mock_result()
-        # Inject the REAL trace into the mock result
         mock.execution_trace = execution_trace
         logger.info(f"DEBUG: Returning Mock. Captured Trace Length: {len(execution_trace)}")
         print(f"DEBUG: Captured Trace: {execution_trace}")
         return mock
         
-    client = AsyncOpenAI(api_key=api_key)
     try:
+        # We don't pass a client instance, we just use the configured genai lib
         results = await asyncio.gather(
-            _run_agent(client, PROMPT_ACCESSIBILITY, messages, context_access),
-            _run_agent(client, PROMPT_VISUAL_DESIGN, messages, context_visual),
-            _run_agent(client, PROMPT_MOBILE_SDK, messages, context_mobile),
-            _run_agent(client, PROMPT_SYNTAX, messages, context_access),
-            _run_agent(client, PROMPT_FIDELITY, messages, context_fidelity)
+            _run_agent(PROMPT_ACCESSIBILITY, messages, context_access),
+            _run_agent(PROMPT_VISUAL_DESIGN, messages, context_visual),
+            _run_agent(PROMPT_MOBILE_SDK, messages, context_mobile),
+            _run_agent(PROMPT_SYNTAX, messages, context_access),
+            _run_agent(PROMPT_FIDELITY, messages, context_fidelity)
         )
         
         acc_result, vis_result, mob_result, syn_result, fid_result = results
@@ -305,7 +304,6 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
         
         # Call the Aggregator to synthesize the final verdict
         final_verdict = await _run_agent(
-            client, 
             PROMPT_AGGREGATOR, 
             messages, 
             f"SPECIALIST REPORTS: {json.dumps(agent_reports)}"
@@ -358,26 +356,31 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
         logger.error(f"CRITICAL: Multi-Agent Execution Aggregation Failed. Returning Mock Data. Error: {e}", exc_info=True)
         return _get_mock_result(error_msg=str(e))
 
-async def _run_agent(client, system_prompt, messages, context_str="") -> Dict:
-    """Helper to run a single agent."""
-    full_messages = [{"role": "system", "content": system_prompt}]
-    if context_str:
-        full_messages.append({"role": "system", "content": f"CONTEXT: {context_str}"})
-    full_messages.extend(messages)
+async def _run_agent(system_prompt, messages, context_str="") -> Dict:
+    """Helper to run a single agent using Gemini 1.5 Pro."""
+    # Construct a single comprehensive prompt for Gemini
+    # Gemini handles "system instruction" separately, which is great.
+    
+    # 1. Prepare Content
+    chat_history_str = ""
+    for m in messages:
+         role = m.get("role", "user")
+         content = m.get("content", "")
+         chat_history_str += f"\n[{role.upper()}]: {content}\n"
+         
+    final_prompt = f"{chat_history_str}\n\nCONTEXT:\n{context_str}\n\nProduce your analysis in JSON format."
 
     try:
-        response = await asyncio.wait_for(
-            client.chat.completions.create(
-                model="gpt-4o",
-                messages=full_messages,
-                response_format={"type": "json_object"},
-                temperature=0.0,
-                seed=42
-            ),
-            timeout=120.0
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-pro",
+            system_instruction=system_prompt,
+            generation_config={"response_mime_type": "application/json"}
         )
-        content = response.choices[0].message.content
-        # CLEANUP: Remove ```json and ``` if present
+        
+        response = await model.generate_content_async(final_prompt)
+        content = response.text
+        
+        # Redundant cleanup just in case, though mime_type should handle it
         if content.strip().startswith("```"):
             content = content.strip().split("\n", 1)[1] if "\n" in content else content
             if content.strip().endswith("```"):
@@ -385,8 +388,7 @@ async def _run_agent(client, system_prompt, messages, context_str="") -> Dict:
         
         return json.loads(content)
     except Exception as e:
-        logger.error(f"Agent Execution Failed for prompt '{system_prompt[:30]}...'. Error: {e}", exc_info=True)
-        # Return error as rationale so it appears in UI
+        logger.error(f"Agent Execution Failed. Error: {e}", exc_info=True)
         return {
             "rationale": f"Agent Error: {str(e)}",
             "score": 0

@@ -6,3 +6,4 @@ openai
 beautifulsoup4
 html5validator
 playwright
+google-generativeai
