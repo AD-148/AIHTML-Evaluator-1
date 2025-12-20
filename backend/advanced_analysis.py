@@ -428,8 +428,8 @@ class AdvancedAnalyzer:
                                              self._log_trace("warning", f"[WARN] Mobile: <select> has no options.")
 
                                     elif tag in ['input', 'textarea'] and itype not in ['button', 'submit', 'checkbox', 'radio', 'range', 'color']:
-                                        # Fill Input
-                                        val = "test_value"
+                                        # Smart Input Filling
+                                        val = await self._get_smart_input_value(el)
                                         await el.fill(val)
                                         self.logs["mobile_logs"].append(f"Round {current_round+1}: Filled {desc} with '{val}'")
                                         self._log_trace("keyboard", f"[PASS] Mobile: Filled Input {desc} with '{val}'.")
@@ -655,6 +655,78 @@ class AdvancedAnalyzer:
             lines.append(f"- [WARN] {item}")
             
         return "\n".join(lines)
+
+    async def _get_smart_input_value(self, element) -> str:
+        """Determines a context-aware test value for an input element."""
+        try:
+            # Get Attributes
+            itype = await element.get_attribute("type") or "text"
+            name = await element.get_attribute("name") or ""
+            eid = await element.get_attribute("id") or ""
+            lbl = await element.get_attribute("aria-label") or ""
+            placeholder = await element.get_attribute("placeholder") or ""
+            
+            combined = (name + " " + eid + " " + lbl + " " + placeholder).lower()
+            itype = itype.lower()
+
+            # 1. Email
+            if itype == "email" or "email" in combined:
+                return "test@example.com"
+            
+            # 2. Phone / Tel
+            if itype == "tel" or "phone" in combined or "mobile" in combined:
+                return "555-0199"
+            
+            # 3. URL
+            if itype == "url" or "website" in combined or "link" in combined:
+                return "https://example.com"
+            
+            # 4. Dates
+            if itype == "date" or "dob" in combined or "birthday" in combined:
+                return "2025-01-01"
+            if itype in ["time", "datetime-local"]:
+                return "12:00"
+
+            # 5. Numbers / Zip / Age
+            if itype == "number":
+                if "zip" in combined or "postal" in combined:
+                    return "90210"
+                if "age" in combined:
+                    return "25"
+                if "year" in combined:
+                    return "2025"
+                return "10"
+                
+            # 6. Names
+            if "first" in combined and "name" in combined:
+                return "John"
+            if "last" in combined and "name" in combined:
+                return "Doe"
+            if "full" in combined or "name" in combined:
+                return "John Doe"
+            
+            # 7. Password
+            if itype == "password":
+                return "Password123!"
+            
+            # 8. Address
+            if "address" in combined:
+                return "123 Test St"
+            if "city" in combined:
+                return "Test City"
+            if "state" in combined:
+                return "NY"
+            
+            # 9. Search
+            if itype == "search" or "search" in combined:
+                return "test query"
+                
+            # Default
+            return "test_value"
+            
+        except Exception as e:
+            self._log_trace("warning", f"[WARN] Failed to determine smart input: {e}")
+            return "test_value"
 
     def _generate_mobile_summary(self) -> str:
         lines = ["### SYSTEM REPORT: MOBILE SIMULATION LOGS"]

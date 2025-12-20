@@ -38,7 +38,7 @@
                     <p>You’re awesome for using our product and we want to make it even better for you.</p>
                     <div class="start-survey">
                         <button class="btn btn-cstm-light" data-dismiss="modal" aria-label="Close" id='start survey cta'
-                            onclick="document.querySelector('#demoModal').style.display = 'none'; document.querySelector('#screens').style.display = 'block'; moengage.trackClick('start survey cta'); moengage.trackEvent('MOE_RESPONSE_SUBMITTED',{survey_response: document.querySelector('input[name=customRadio]:checked').value, other_product: document.querySelector('textarea').value},{},{},false,true); moengage.setUserAttribute('survey_response', document.querySelector('input[name=customRadio]:checked').value); moengage.dismissMessage();">Start
+                            onclick="document.querySelector('#demoModal').style.display = 'none'; document.querySelector('#screens').style.display = 'block'; moengage.trackClick('start survey cta'); moengage.trackEvent('MOE_RESPONSE_SUBMITTED',{survey_response: 'start_survey', other_product: ''},{},{},false,true); moengage.setUserAttribute('survey_response', 'start_survey'); moengage.dismissMessage();">Start
                             Survey</button>
                     </div>
                 </div>
