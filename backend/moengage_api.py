@@ -54,14 +54,31 @@ def generate_html_from_stream(prompt: str) -> str:
     # Combine Headers
     request_headers = HEADERS.copy()
     request_headers["authorization"] = f"Bearer {auth_token}"
-    request_headers["cookie"] = cookies_header # Requests handles cookies better via 'cookies' param, but CURL sent header.
     
+    # Parse Cookie String to Dict for robust Request handling
+    cookie_dict = {}
+    if cookies_header:
+        try:
+            for item in cookies_header.split(";"):
+                if "=" in item:
+                    k, v = item.strip().split("=", 1)
+                    cookie_dict[k] = v
+        except Exception:
+            logger.warning("Failed to parse cookie string, using raw header fallback.")
+            request_headers["cookie"] = cookies_header
+
     final_html = ""
     
     try:
         logger.info(f"Streaming HTML from MoEngage for prompt: {prompt[:30]}...")
         # Timeout increased to 900s (15 mins) as generation can take ~4 mins
-        with requests.post(API_URL, json=payload, headers=request_headers, stream=True, timeout=900) as response:
+        # Use 'cookies' param if parsed, otherwise fallback to header is already handled above (but we remove it if dict exists to avoid dup)
+        if cookie_dict:
+             response = requests.post(API_URL, json=payload, headers=request_headers, cookies=cookie_dict, stream=True, timeout=900)
+        else:
+             response = requests.post(API_URL, json=payload, headers=request_headers, stream=True, timeout=900)
+             
+        with response:
             if response.status_code != 200:
                 logger.error(f"MoEngage API Error {response.status_code}: {response.text[:200]}")
                 return ""
@@ -93,6 +110,15 @@ def generate_html_from_stream(prompt: str) -> str:
             return final_html
         else:
             logger.warning("Stream finished but no HTML found.")
+            # Log the last few lines to see what we got
+            try:
+                debug_lines = []
+                # Re-reading stream isn't possible, but we can log during iteration if we track it.
+                # Since we are modifying code, let's just log the LAST processed JSON if available.
+                if 'json_data' in locals():
+                    logger.info(f"Last JSON received: {str(json_data)[:500]}")
+            except Exception:
+                pass
             return ""
             
     except Exception as e:
