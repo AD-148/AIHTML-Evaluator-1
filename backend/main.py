@@ -87,6 +87,9 @@ async def batch_evaluate(file: UploadFile = File(...)):
         # 3. Iterate & Process (Preserving Original Rows)
         # We will create lists to populate new columns
         generated_htmls = []
+        debug_raw_msgs = []
+        debug_full_msgs = []
+        
         score_fids = []
         score_viss = []
         score_accs = []
@@ -99,6 +102,16 @@ async def batch_evaluate(file: UploadFile = File(...)):
         for index, row in df.iterrows():
             prompt = str(row['Prompt'])
             logger.info(f"Processing Row {index+1}: {prompt[:30]}...")
+
+            # 1. Capture Raw and Full Prompt
+            debug_raw_msgs.append(prompt)
+            # Access constant from module dynamically if needed, or import
+            try:
+                from backend.moengage_api import BYPASS_INSTRUCTION
+            except ImportError:
+                from moengage_api import BYPASS_INSTRUCTION
+            
+            debug_full_msgs.append(prompt + BYPASS_INSTRUCTION)
 
             # A. Generate HTML
             html_content = generate_html_from_stream(prompt)
@@ -149,6 +162,11 @@ async def batch_evaluate(file: UploadFile = File(...)):
                 test_logs.append(str(e))
                 
         # 4. Append Columns to DataFrame
+        # Add Debug Columns First
+        df['Debug_Raw_Parsing_Prompt'] = debug_raw_msgs
+        df['Debug_Full_API_Prompt'] = debug_full_msgs
+        df['Clean_HTML_Output'] = generated_htmls # Duplicate for clarity
+        
         df['Generated_HTML'] = generated_htmls
         df['Score_Fidelity'] = score_fids
         df['Score_Visual'] = score_viss
