@@ -11,6 +11,7 @@ const App = () => {
   const [loading, setLoading] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [showJson, setShowJson] = useState(false); // Toggle for JSON view
+  const [batchFile, setBatchFile] = useState(null); // File object for batch upload
   const messagesEndRef = useRef(null);
 
   // --- RENDER HELPERS ---
@@ -138,6 +139,47 @@ const App = () => {
     setHtmlInput(fixedHtml);
   };
 
+  // 4. Batch Upload Action
+  const handleBatchUpload = async () => {
+    if (!batchFile) return;
+    setLoading(true);
+
+    const formData = new FormData();
+    formData.append('file', batchFile);
+
+    try {
+      const response = await fetch('/batch/process', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Batch Failed: ${text}`);
+      }
+
+      // Auto-Download Blob
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "evaluated_results.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      alert("Batch Complete! File downloaded.");
+
+    } catch (e) {
+      console.error(e);
+      alert("Error during batch processing: " + e.message);
+    } finally {
+      setLoading(false);
+      setBatchFile(null);
+    }
+  };
+
   return (
     <div className="app-container">
       <header>
@@ -219,6 +261,12 @@ const App = () => {
               onClick={() => setActiveTab('preview')}
             >
               <i className="fa-solid fa-eye"></i> Preview
+            </button>
+            <button
+              className={`tab-btn ${activeTab === 'batch' ? 'active' : ''}`}
+              onClick={() => setActiveTab('batch')}
+            >
+              <i className="fa-solid fa-file-excel"></i> Batch
             </button>
           </div>
 
@@ -454,6 +502,54 @@ const App = () => {
                 {latestAnalysis && !latestAnalysis.execution_trace && (
                   <div style={{ padding: '1rem', color: '#94a3b8' }}>No generic trace available.</div>
                 )}
+              </div>
+            )}
+
+            {/* 5. BATCH TAB */}
+            {activeTab === 'batch' && (
+              <div className="fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ background: '#0f172a', padding: '2rem', borderRadius: '1rem', border: '1px solid #334155', textAlign: 'center', maxWidth: '500px' }}>
+                  <i className="fa-solid fa-file-excel" style={{ fontSize: '3rem', color: '#10b981', marginBottom: '1rem' }}></i>
+                  <h2 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Batch Excel Processing</h2>
+                  <p style={{ color: '#94a3b8', marginBottom: '1.5rem' }}>
+                    Upload an Excel file (.xlsx) with a column named <strong>'Prompt'</strong>.<br />
+                    We will generate HTML, evaluate it, and return the same file with results appended.
+                  </p>
+
+                  <input
+                    type="file"
+                    accept=".xlsx"
+                    id="batchInput"
+                    onChange={(e) => setBatchFile(e.target.files[0])}
+                    style={{ marginBottom: '1rem', color: 'white' }}
+                  />
+
+                  <br />
+
+                  <button
+                    onClick={handleBatchUpload}
+                    disabled={loading || !batchFile}
+                    style={{
+                      background: loading || !batchFile ? '#334155' : '#10b981',
+                      color: 'white',
+                      padding: '0.8rem 2rem',
+                      borderRadius: '0.5rem',
+                      border: 'none',
+                      fontSize: '1rem',
+                      cursor: (loading || !batchFile) ? 'not-allowed' : 'pointer',
+                      marginTop: '1rem'
+                    }}
+                  >
+                    {loading ? (
+                      <span><i className="fa-solid fa-spinner fa-spin"></i> Processing Rows...</span>
+                    ) : (
+                      <span><i className="fa-solid fa-play"></i> Start Batch Job</span>
+                    )}
+                  </button>
+
+                  {loading && <p style={{ marginTop: '1rem', color: '#f59e0b', fontSize: '0.9rem' }}>Please wait. Do not close this tab.</p>}
+
+                </div>
               </div>
             )}
           </div >

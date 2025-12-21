@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from typing import Optional, List
 from fastapi.middleware.cors import CORSMiddleware
@@ -61,6 +61,119 @@ async def evaluate_conversation(input_data: ChatInput):
         logger.error(f"Error evaluating conversation: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/batch/process")
+async def batch_evaluate(file: UploadFile = File(...)):
+    """
+    Accepts an Excel file with a 'Prompt' column.
+    Generates HTML (via MoEngage Streaming API) and evaluates it.
+    Appends results to the ORIGINAL sheet and returns it.
+    """
+    try:
+        # 1. Imports
+        import pandas as pd
+        from io import BytesIO
+        try:
+             from backend.moengage_api import generate_html_from_stream
+        except ImportError:
+             from moengage_api import generate_html_from_stream
+
+        # 2. Read Valid Excel
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+        
+        if "Prompt" not in df.columns:
+             raise HTTPException(status_code=400, detail="Excel must have a 'Prompt' column (Case-sensitive).")
+             
+        # 3. Iterate & Process (Preserving Original Rows)
+        # We will create lists to populate new columns
+        generated_htmls = []
+        score_fids = []
+        score_viss = []
+        score_accs = []
+        score_resps = []
+        score_syns = []
+        verdicts = []
+        rationales = []
+        test_logs = []
+        
+        for index, row in df.iterrows():
+            prompt = str(row['Prompt'])
+            logger.info(f"Processing Row {index+1}: {prompt[:30]}...")
+
+            # A. Generate HTML
+            html_content = generate_html_from_stream(prompt)
+            
+            # If generation failed completely
+            if not html_content:
+                generated_htmls.append("GENERATION_FAILED")
+                score_fids.append(0)
+                score_viss.append(0)
+                score_accs.append(0)
+                score_resps.append(0)
+                score_syns.append(0)
+                verdicts.append("ERROR")
+                rationales.append("Failed to generate HTML from API.")
+                test_logs.append("API Error.")
+                continue
+
+            generated_htmls.append(html_content)
+
+            # B. Evaluate
+            try:
+                # Reuse existing logic
+                eval_result = await analyze_chat([{"role": "user", "content": html_content}])
+                
+                score_fids.append(eval_result.score_fidelity)
+                score_viss.append(eval_result.score_visual)
+                score_accs.append(eval_result.score_accessibility)
+                score_resps.append(eval_result.score_responsiveness)
+                # Ensure syntax score exists if not in model yet, or fallback
+                score_syns.append(getattr(eval_result, 'score_syntax', 0))
+                
+                verdicts.append(eval_result.final_judgement)
+                rationales.append(eval_result.rationale)
+                
+                # Join execution trace
+                trace_str = "\n".join(eval_result.execution_trace)
+                test_logs.append(trace_str)
+                
+            except Exception as e:
+                logger.error(f"Row {index+1} Eval Failed: {e}")
+                score_fids.append(0)
+                score_viss.append(0)
+                score_accs.append(0)
+                score_resps.append(0)
+                score_syns.append(0)
+                verdicts.append("EVAL_ERROR")
+                rationales.append(f"Evaluation Exception: {str(e)}")
+                test_logs.append(str(e))
+                
+        # 4. Append Columns to DataFrame
+        df['Generated_HTML'] = generated_htmls
+        df['Score_Fidelity'] = score_fids
+        df['Score_Visual'] = score_viss
+        df['Score_Accessibility'] = score_accs
+        df['Score_Responsiveness'] = score_resps
+        df['Score_Syntax'] = score_syns
+        df['Verdict'] = verdicts
+        df['Rationale'] = rationales
+        df['Test_Log'] = test_logs
+        
+        # 5. Return File
+        output_stream = BytesIO()
+        df.to_excel(output_stream, index=False)
+        output_stream.seek(0)
+        
+        from fastapi.responses import StreamingResponse
+        headers = {
+            'Content-Disposition': 'attachment; filename="evaluated_results.xlsx"'
+        }
+        return StreamingResponse(output_stream, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers=headers)
+
+    except Exception as e:
+        logger.error(f"Batch Processing Error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 from fastapi.staticfiles import StaticFiles
 
 # Create static directory if it doesn't exist (it should)
@@ -68,10 +181,8 @@ from fastapi.staticfiles import StaticFiles
 # mounted at the end to avoid overriding API routes
 # Skip this if running on Vercel, as Vercel handles static files via rewrites
 import os
-if not os.environ.get("VERCEL"):
-    frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
-    if os.path.exists(frontend_path):
-        app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+# Static files should be handled by Nginx or Vercel
+# app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
 
 import logging
 import sys

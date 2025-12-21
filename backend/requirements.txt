@@ -7,3 +7,8 @@ beautifulsoup4
 html5validator
 playwright
 google-generativeai
+pandas
+openpyxl
+requests
+python-multipart
+aiofiles

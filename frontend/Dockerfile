@@ -1,12 +1,18 @@
 # Build Stage
-FROM node:20-alpine as build
+# Build Stage
+FROM node:20-slim as build
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci
+COPY package.json ./
+# Force fresh install
+RUN npm install
+# Explicitly pin esbuild to match host expectation
+RUN npm install esbuild@0.25.12 --save-exact
 
 COPY . .
+# Fix permissions just in case
+RUN chmod -R +x node_modules/.bin/
 RUN npm run build
 
 # Production Stage
