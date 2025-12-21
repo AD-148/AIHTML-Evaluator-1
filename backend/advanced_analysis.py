@@ -279,6 +279,14 @@ class AdvancedAnalyzer:
                         await page.set_viewport_size({'width': 390, 'height': 844})
                         await page.wait_for_timeout(200)
                         
+                        # Verify Portrait Responsiveness (Horizontal Scroll Check)
+                        scroll_width_p = await page.evaluate("document.body.scrollWidth")
+                        if scroll_width_p > 390:
+                             self.logs["mobile_logs"].append(f"PORTRAIT FAIL: Horizontal scroll detected.")
+                             self._log_trace("x", "[FAIL] Portrait Mode: Horizontal scroll detected (Width > 390px).")
+                        else:
+                             self._log_trace("white_check_mark", "[PASS] Portrait Mode: No horizontal scroll.")
+                        
                         # --- DYNAMIC INTERACTION LOOP ---
                         # We will perform up to 10 "Rounds" of interaction. 
                         # A Round consists of scanning the page, picking the best action, and executing it.
