@@ -89,6 +89,7 @@ async def batch_evaluate(file: UploadFile = File(...)):
         generated_htmls = []
         debug_raw_msgs = []
         debug_full_msgs = []
+        debug_api_logs = []
         
         score_fids = []
         score_viss = []
@@ -114,7 +115,8 @@ async def batch_evaluate(file: UploadFile = File(...)):
             debug_full_msgs.append(prompt + BYPASS_INSTRUCTION)
 
             # A. Generate HTML
-            html_content = generate_html_from_stream(prompt)
+            html_content, api_log = generate_html_from_stream(prompt)
+            debug_api_logs.append(api_log)
             
             # If generation failed completely
             if not html_content:
@@ -126,7 +128,7 @@ async def batch_evaluate(file: UploadFile = File(...)):
                 score_syns.append(0)
                 verdicts.append("ERROR")
                 rationales.append("Failed to generate HTML from API.")
-                test_logs.append("API Error.")
+                test_logs.append(f"API Error: {api_log}")
                 continue
 
             generated_htmls.append(html_content)
@@ -165,6 +167,7 @@ async def batch_evaluate(file: UploadFile = File(...)):
         # Add Debug Columns First
         df['Debug_Raw_Parsing_Prompt'] = debug_raw_msgs
         df['Debug_Full_API_Prompt'] = debug_full_msgs
+        df['Debug_API_Response'] = debug_api_logs
         df['Clean_HTML_Output'] = generated_htmls # Duplicate for clarity
         
         df['Generated_HTML'] = generated_htmls

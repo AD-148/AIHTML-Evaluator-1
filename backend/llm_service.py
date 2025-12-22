@@ -16,6 +16,24 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+# Explicit Manual Fallback for Docker environment (Robust)
+if not os.getenv("GEMINI_API_KEY"):
+    logger.info("Env Key Missing. Attempting manual read of /app/.env")
+    try:
+        if os.path.exists("/app/.env"):
+            with open("/app/.env", "r") as f:
+                for line in f:
+                    if line.strip().startswith("GEMINI_API_KEY="):
+                        val = line.strip().split("=", 1)[1]
+                        # Remove quotes if present
+                        if val.startswith('"') and val.endswith('"'): val = val[1:-1]
+                        elif val.startswith("'") and val.endswith("'"): val = val[1:-1]
+                        os.environ["GEMINI_API_KEY"] = val
+                        logger.info("Successfully loaded GEMINI_API_KEY from /app/.env")
+                        break
+    except Exception as e:
+        logger.error(f"Manual .env read failed: {e}")
+
 # Data Models
 class EvaluationResult(BaseModel):
     score_fidelity: int = Field(..., description="0-100 score for how well the HTML matches the user's request")

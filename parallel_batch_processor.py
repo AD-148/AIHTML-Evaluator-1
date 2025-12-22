@@ -101,12 +101,40 @@ def process_row(index, prompt):
                     if decoded_line.startswith("data:"):
                         decoded_line = decoded_line[5:].strip()
                     
+                    # Handle SSE format (remove "data: " prefix if present)
+                    if decoded_line.startswith("data:"):
+                        decoded_line = decoded_line[5:]
+                        
+                    if not decoded_line.strip():
+                        continue
+
                     try:
-                        json_data = json.loads(decoded_line)
-                        # Path: preview-payload -> data -> html
-                        html_chunk = json_data.get("preview-payload", {}).get("data", {}).get("html")
-                        if html_chunk:
-                            final_html = html_chunk
+                        # Parse the JSON chunk
+                        chunk_json = json.loads(decoded_line)
+                        
+                        # --- CRITICAL STEP: Extract from 'html' key ---
+                        html_fragment = chunk_json.get("html")
+                        
+                        if not html_fragment and "payload" in chunk_json:
+                             html_fragment = chunk_json["payload"].get("html")
+
+                        # NEW: Check 'content' key (Corrected Path)
+                        if not html_fragment and "content" in chunk_json:
+                             content_val = chunk_json.get("content") or {}
+                             if isinstance(content_val, dict):
+                                 # Path: content -> preview-payload -> data -> html
+                                 preview_payload = content_val.get("preview-payload") or {}
+                                 data_node = preview_payload.get("data") or {}
+                                 html_fragment = data_node.get("html")
+                                 
+                                 # Fallback
+                                 if not html_fragment:
+                                     html_fragment = content_val.get("html")
+                        
+                        # Append if data was found
+                        if html_fragment:
+                            final_html += html_fragment
+
                     except json.JSONDecodeError:
                         continue
         
