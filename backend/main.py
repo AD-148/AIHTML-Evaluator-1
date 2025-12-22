@@ -3,6 +3,8 @@ from pydantic import BaseModel
 from typing import Optional, List
 from fastapi.middleware.cors import CORSMiddleware
 import os
+import asyncio
+from starlette.concurrency import run_in_threadpool
 from dotenv import load_dotenv
 
 try:
@@ -73,9 +75,9 @@ async def batch_evaluate(file: UploadFile = File(...)):
         import pandas as pd
         from io import BytesIO
         try:
-             from backend.moengage_api import generate_html_from_stream, create_new_session
+             from backend.moengage_api import generate_html_from_stream, create_new_session, BYPASS_INSTRUCTION
         except ImportError:
-             from moengage_api import generate_html_from_stream, create_new_session
+             from moengage_api import generate_html_from_stream, create_new_session, BYPASS_INSTRUCTION
 
         # 2. Read Valid Excel
         contents = await file.read()
@@ -84,111 +86,96 @@ async def batch_evaluate(file: UploadFile = File(...)):
         if "Prompt" not in df.columns:
              raise HTTPException(status_code=400, detail="Excel must have a 'Prompt' column (Case-sensitive).")
              
-        # 3. Iterate & Process (Preserving Original Rows)
-        # We will create lists to populate new columns
-        generated_htmls = []
-        debug_raw_msgs = []
-        debug_full_msgs = []
-        debug_api_logs = []
-        
-        score_fids = []
-        score_viss = []
-        score_accs = []
-        score_resps = []
-        score_syns = []
-        verdicts = []
-        rationales = []
-        test_logs = []
-        
-        for index, row in df.iterrows():
+        # 3. Define Parallel Worker Function
+        async def process_row(index, row):
             prompt = str(row['Prompt'])
-            logger.info(f"Processing Row {index+1}: {prompt[:30]}...")
-
-            # 1. Capture Raw and Full Prompt
-            debug_raw_msgs.append(prompt)
-            # Access constant from module dynamically if needed, or import
+            logger.info(f"Starting Row {index+1}: {prompt[:30]}...")
+            
+            result = {
+                "Debug_Raw_Parsing_Prompt": prompt,
+                "Debug_Full_API_Prompt": prompt + BYPASS_INSTRUCTION,
+                "Debug_API_Response": "",
+                "Generated_HTML": "GENERATION_FAILED", # Default
+                "Clean_HTML_Output": "GENERATION_FAILED",
+                "Score_Fidelity": 0,
+                "Score_Visual": 0,
+                "Score_Accessibility": 0,
+                "Score_Responsiveness": 0,
+                "Score_Syntax": 0,
+                "Verdict": "ERROR",
+                "Rationale": "Processing Error",
+                "Test_Log": ""
+            }
+            
+            # A. Create Session (Blocking -> Thread)
             try:
-                from backend.moengage_api import BYPASS_INSTRUCTION, create_new_session
-            except ImportError:
-                from moengage_api import BYPASS_INSTRUCTION, create_new_session
-            
-            debug_full_msgs.append(prompt + BYPASS_INSTRUCTION)
+                session_id = await run_in_threadpool(create_new_session)
+                if not session_id:
+                    result["Test_Log"] = "Failed to create session."
+                    return result
+            except Exception as e:
+                result["Test_Log"] = f"Session Creation Exception: {e}"
+                return result
 
-            # A. Create New Session for this Prompt
-            session_id = create_new_session()
-            if not session_id:
-                logger.error(f"Row {index+1}: Failed to create session.")
-                # Fallback or Error? 
-                # We will mark as Error to be safe, or try without session (api might fail)
-                session_id = None 
-
-            # B. Generate HTML with dynamic session
-            html_content, api_log = generate_html_from_stream(prompt, session_id)
-            debug_api_logs.append(api_log)
-            
-            # If generation failed completely
+            # B. Generate HTML (Blocking -> Thread)
+            # Pass session_id explicitly
+            try:
+                html_content, api_log = await run_in_threadpool(generate_html_from_stream, prompt, session_id)
+                result["Debug_API_Response"] = api_log
+            except Exception as e:
+                result["Test_Log"] = f"Generation Exception: {e}"
+                return result
+                
             if not html_content:
-                generated_htmls.append("GENERATION_FAILED")
-                score_fids.append(0)
-                score_viss.append(0)
-                score_accs.append(0)
-                score_resps.append(0)
-                score_syns.append(0)
-                verdicts.append("ERROR")
-                rationales.append("Failed to generate HTML from API.")
-                test_logs.append(f"API Error: {api_log}")
-                continue
+                result["Rationale"] = "Failed to generate HTML from API."
+                result["Test_Log"] = f"API Error: {api_log}"
+                return result
+                
+            # Success: Update HTML fields
+            result["Generated_HTML"] = html_content
+            result["Clean_HTML_Output"] = html_content
 
-            generated_htmls.append(html_content)
-
-            # B. Evaluate
+            # C. Evaluate (Async)
             try:
-                # Reuse existing logic
                 eval_result = await analyze_chat([{"role": "user", "content": html_content}])
                 
-                score_fids.append(eval_result.score_fidelity)
-                score_viss.append(eval_result.score_visual)
-                score_accs.append(eval_result.score_accessibility)
-                score_resps.append(eval_result.score_responsiveness)
-                # Ensure syntax score exists if not in model yet, or fallback
-                score_syns.append(getattr(eval_result, 'score_syntax', 0))
+                result["Score_Fidelity"] = eval_result.score_fidelity
+                result["Score_Visual"] = eval_result.score_visual
+                result["Score_Accessibility"] = eval_result.score_accessibility
+                result["Score_Responsiveness"] = eval_result.score_responsiveness
+                result["Score_Syntax"] = getattr(eval_result, 'score_syntax', 0)
                 
-                verdicts.append(eval_result.final_judgement)
-                rationales.append(eval_result.rationale)
-                
-                # Join execution trace
-                trace_str = "\n".join(eval_result.execution_trace)
-                test_logs.append(trace_str)
+                result["Verdict"] = eval_result.final_judgement
+                result["Rationale"] = eval_result.rationale
+                result["Test_Log"] = "\n".join(eval_result.execution_trace)
                 
             except Exception as e:
                 logger.error(f"Row {index+1} Eval Failed: {e}")
-                score_fids.append(0)
-                score_viss.append(0)
-                score_accs.append(0)
-                score_resps.append(0)
-                score_syns.append(0)
-                verdicts.append("EVAL_ERROR")
-                rationales.append(f"Evaluation Exception: {str(e)}")
-                test_logs.append(str(e))
+                result["Verdict"] = "EVAL_ERROR"
+                result["Test_Log"] = f"Evaluation Exception: {e}"
                 
-        # 4. Append Columns to DataFrame
-        # Add Debug Columns First
-        df['Debug_Raw_Parsing_Prompt'] = debug_raw_msgs
-        df['Debug_Full_API_Prompt'] = debug_full_msgs
-        df['Debug_API_Response'] = debug_api_logs
-        df['Clean_HTML_Output'] = generated_htmls # Duplicate for clarity
+            return result
+
+        # 4. Launch Tasks in Parallel
+        logger.info(f"Processing {len(df)} rows in PARALLEL...")
+        tasks = [process_row(i, r) for i, r in df.iterrows()]
+        results = await asyncio.gather(*tasks)
         
-        df['Generated_HTML'] = generated_htmls
-        df['Score_Fidelity'] = score_fids
-        df['Score_Visual'] = score_viss
-        df['Score_Accessibility'] = score_accs
-        df['Score_Responsiveness'] = score_resps
-        df['Score_Syntax'] = score_syns
-        df['Verdict'] = verdicts
-        df['Rationale'] = rationales
-        df['Test_Log'] = test_logs
+        # 5. Map Results back to DataFrame Columns
+        # results list corresponds to df indices 0..N
         
-        # 5. Return File
+        # Initialize lists for new columns
+        new_cols = {k: [] for k in results[0].keys()}
+        
+        for res in results:
+            for k, v in res.items():
+                new_cols[k].append(v)
+                
+        # Assign to DF
+        for k, v in new_cols.items():
+            df[k] = v
+        
+        # 6. Return File
         output_stream = BytesIO()
         df.to_excel(output_stream, index=False)
         output_stream.seek(0)
