@@ -9,73 +9,43 @@ logger = logging.getLogger(__name__)
 BYPASS_INSTRUCTION = " Do not ask for clarification. If details are missing, make a reasonable assumption based on the context and proceed. If multiple valid options exist, choose the most common one. Your goal is to provide a final answer in the first response."
 
 # Configuration (Should be in .env, but defaults provided for immediate usage)
-API_URL = "https://html-ai-template.moestaging.com/api/v1/bff/response/stream?user_id=arijit.das@moengage.com&session_id=a56958c9-2828-4ad1-8ef3-1e72806ef628&agent_id=inapp-html-ai-v1"
+# Configuration (Should be in .env, but defaults provided for immediate usage)
+API_BASE = "https://html-ai-template.moestaging.com/api/v1/bff"
+API_URL = f"{API_BASE}/response/stream?user_id=arijit.das@moengage.com&session_id={{}}&agent_id=inapp-html-ai-v1"
+SESSION_URL = f"{API_BASE}/sessions"
 
 # Headers from User CURL
 # Note: In a real prod env, these should be rotated and loaded from secrets.
 HEADERS = {
     "accept": "application/json",
-    "accept-language": "en-US,en;q=0.9",
+    "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
     "content-type": "application/json",
     # "authorization": "Bearer ...", # Loaded from env or fallback
-    "moetraceid": "d39639d2-a4c3-4da8-8b62-185294eda567",
+    "moetraceid": "4b98eba2-170d-491b-a6b4-926731212e28",
     "origin": "https://html-ai-template.moestaging.com",
-    "page": "inapp/edit/69439a204e66b370a00fadaa",
+    "page": "inapp/edit/69491f364e66b370a00fb246",
     "priority": "u=1, i",
-    "refreshtoken": "0d403795-1b35-4e7f-a919-becae42ef23f",
-    "sec-ch-ua": '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
+    "refreshtoken": "26a480a6-f3f5-44c5-83e8-01d763c6237b",
+    "sec-ch-ua": '"Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"',
     "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"Windows"',
+    "sec-ch-ua-platform": '"macOS"',
     "sec-fetch-dest": "empty",
     "sec-fetch-mode": "cors",
     "sec-fetch-site": "same-origin",
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
 }
 
 import uuid
 import time
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
-def generate_html_from_stream(prompt: str, session_id: str = None) -> tuple[str, str]:
-    """
-    Calls the MoEngage Streaming API with the prompt + strict instruction.
-    Parses the JSON stream to find 'preview-payload.data.html'.
-    Returns (final_html, debug_log).
-    """
-    full_prompt = str(prompt) + BYPASS_INSTRUCTION
-    
-    # Updated Defaults from User CURL
-    auth_token = os.environ.get("MOENGAGE_BEARER_TOKEN", "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE1NzI1MTI0NTciLCJ0eXAiOiJKV1QifQ.eyJhcHAiOnsiYXBwX2tleSI6IkNNNEQxTFpOMklNSk5CWTlVTFhBVTczRCIsImRiX25hbWUiOiJ6YWluX2luYXBwIiwiZGlzcGxheV9uYW1lIjoiemFpbl9pbmFwcCIsImVudmlyb25tZW50IjoibGl2ZSIsImlkIjoiNjM5ODUyZWViMGVjOWFiMzhhNzkyMTg5In0sImV4cCI6MTc3MTMwMjc0NiwiaWF0IjoxNzY2MDQ2NzQ2LCJpc3MiOiJhcHAubW9lbmdhZ2UuY29tIiwibmJmIjoxNzY2MDQ2NzQ2LCJyb2xlIjoiQWRtaW4iLCJ1c2VyIjp7IjJGQSI6dHJ1ZSwiZW1haWwiOiJhcmlqaXQuZGFzQG1vZW5nYWdlLmNvbSIsImlkIjoiNjNkY2VmODc4MGU5MzdiODljMTRjYjM3IiwibG9naW5fdHlwZSI6IlNURCJ9fQ.cCfP8y73ClnomYmWXyzr1CD3K74DebO5zHWwCMitzxxcdJ73HZTDepkz-5ufdRwnx10YchsrlqTx2aktESzi_zSq3VptSJr6s9WZVS8zs_43QcPSB5E0B6a6Ijo6qdwdnA9fyafdgs7LWw_XaJt9Fu4Mb2lQYjeV1wZb5kY8Vs76f7rIr81Bpaoa70-_Z3rfSteD3_N3gicJ4eKZVqmxYrX-GbIiGuN6kNthm-Wz9_cbbuIde4lhALrzje1y9AKIJZxCRYi5d8FBpnnAj4YWg6IB6mwG3rIvhgM7O-_Zm27IiDGAlEAxYAvYB7tsOVRZusm_a5SEqqJlChmuyidaPw")
-    cookies_header = os.environ.get("MOENGAGE_COOKIES", "moe_c_s=1; moe_uuid=56baa3f7-285d-49c1-b67e-5482e2755748; moe_u_d=HcfBCoAgDADQf9m5XdSl9jOiboNACDJP0b8nHt8LPV2N4dDcumzAKTPL9HOPxXFOgK1UPZuIFIKgC5Ew-lzQOxYtVIzuFr4f; moe_s_n=RYpBDsMgDAT_4nOQMBgb8pWqshqcSlXV9kBuVf4eyCW33Zn5Q9M3zGAZqVgQt4SVHLH1tdTqRJ6JsZI9rMDU46YbzCjMkXzMgoyDfk6avZ-g6ku3cW_3YdarD1hCij356k9bp2k_AA")
-    # Use a fresh Session ID for every request to avoid context pollution or statefulness errors
-    # Fallback to env var or the KNOWN WORKING ID. Random UUIDs are rejected by this API.
-    if not session_id:
-        session_id = os.environ.get("MOENGAGE_SESSION_ID", "744d569d-d0e2-42b2-9f26-271fc666d0f5")
-    
-    # Inject Session ID into URL
-    url_parts = list(urlparse(API_URL))
-    query = dict(parse_qs(url_parts[4]))
-    query['session_id'] = session_id
-    # Add nonce to prevent caching/deduping since TraceID is static
-    query['_nonce'] = str(int(time.time() * 1000))
-    url_parts[4] = urlencode(query, doseq=True)
-    dynamic_url = urlunparse(url_parts)
-    
-    payload = {
-        "payload": {
-            "type": "user",
-            "text": full_prompt
-        }
-    }
-    
-    # Combine Headers
-    request_headers = HEADERS.copy()
-    request_headers["authorization"] = f"Bearer {auth_token}"
-    # Reverting to static TraceID for debugging baseline
-    request_headers["moetraceid"] = "6e7fac1e-080f-405c-8974-02f15bd956a9"
-    request_headers["page"] = "inapp/create/" 
+def get_common_headers(auth_token):
+    req_headers = HEADERS.copy()
+    req_headers["authorization"] = f"Bearer {auth_token}"
+    return req_headers
 
-    # Parse Cookie String to Dict for robust Request handling
+def get_cookies_dict():
+    cookies_header = os.environ.get("MOENGAGE_COOKIES", "_scid=AsJJr3gxvsEOCULspgBrYvrXBS_ySPrc; _scid_r=AsJJr3gxvsEOCULspgBrYvrXBS_ySPrc; moe_c_s=1; ajs_user_id=CM4D1LZN2IMJNBY9ULXAU73Darijit.das@moengage.com; ajs_anonymous_id=%22ea9738f6-abd4-4da6-9ebe-5eeee784908f%22; moe_uuid=07eb325d-7fd9-4a33-abea-bffc5de3030e; moe_u_d=HcfBCoAgDADQf9m5HdKps58R1xQCIcg8Rf-edHwP9HQ2ha3m1ssCmrJqmb6v8XMcExCDtdUbi1F2QmJyKCQe2busVQKzWeH9AA; moe_s_n=RYo7DsIwDEDv4jmRHOI6ca6CkNX8JISAId0Qd2_TpeP7_GDoCxJ0pl5IxLbWnSUqxa61kvVrZrqFHHPNYI556AbJBWZyXgR5cdO-TxsRDRR96jbx_pilXf8SBANGAx_96oDk_zs")
     cookie_dict = {}
     if cookies_header:
         try:
@@ -85,16 +55,84 @@ def generate_html_from_stream(prompt: str, session_id: str = None) -> tuple[str,
                     cookie_dict[k] = v
         except Exception:
             logger.warning("Failed to parse cookie string, using raw header fallback.")
-            request_headers["cookie"] = cookies_header
+    return cookie_dict
+
+def create_new_session() -> str:
+    """
+    Creates a new session via the /sessions endpoint.
+    Returns the session_id string.
+    """
+    auth_token = os.environ.get("MOENGAGE_BEARER_TOKEN", "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE1NzI1MTI0NTciLCJ0eXAiOiJKV1QifQ.eyJhcHAiOnsiYXBwX2tleSI6IkNNNEQxTFpOMklNSk5CWTlVTFhBVTczRCIsImRiX25hbWUiOiJ6YWluX2luYXBwIiwiZGlzcGxheV9uYW1lIjoiemFpbl9pbmFwcCIsImVudmlyb25tZW50IjoibGl2ZSIsImlkIjoiNjM5ODUyZWViMGVjOWFiMzhhNzkyMTg5In0sImV4cCI6MTc3MTY1MTc2MCwiaWF0IjoxNzY2Mzk1NzYwLCJpc3MiOiJhcHAubW9lbmdhZ2UuY29tIiwibmJmIjoxNzY2Mzk1NzYwLCJyb2xlIjoiQWRtaW4iLCJ1c2VyIjp7IjJGQSI6dHJ1ZSwiZW1haWwiOiJhcmlqaXQuZGFzQG1vZW5nYWdlLmNvbSIsImlkIjoiNjNkY2VmODc4MGU5MzdiODljMTRjYjM3IiwibG9naW5fdHlwZSI6IlNURCJ9fQ.NETovxWt1zKU-HRkxB4SOXDnXFVJM6kWdVPdBFTyBxO9LtEReCOoQ_aOBucvBN9obinEmaR360Z5x04FWguE9Ipq-hTQA5YzqJciV7Z6lCR_w9hupKMj5OS49l8-xNB8Di8JZ3zau0-pYUW8RzbjMZ61y2sMybVy2PHQgbey_zrSiVxNZNaVJfBtyE1jHvjPpWKpMaCHglcZQj86vyREx2qVP8Hh473kykxvBcm0spd3lyCW39SgJ8XBEXKYald0DnIaQOoR98E9QGxBwvIQxApbMTLgAj5g4Hd95ggdn7LvJmczo1lIG4VUjijD2tCr2N_p50p-qkD8s_W9sOYtwA")
     
+    headers = get_common_headers(auth_token)
+    cookie_dict = get_cookies_dict()
+    
+    # Payload for session creation (from CURL)
+    payload = {"user_id": "arijit.das@moengage.com", "agent_id": "inapp-html-ai-v1"}
+    
+    try:
+        logger.info("Creating new session...")
+        resp = requests.post(SESSION_URL, json=payload, headers=headers, cookies=cookie_dict, timeout=30)
+        resp.raise_for_status()
+        
+        data = resp.json()
+        # Assuming response structure based on typical API, if not we will debug.
+        # Usually returns { "session_id": "..." } or similar
+        # Based on prev code, we might need to inspect 'data'
+        # If API returns straight JSON with session_id
+        session_id = data.get("session_id")
+        
+        # If nested: data.get("data", {}).get("session_id")
+        if not session_id:
+             session_id = data.get("data", {}).get("session_id")
+             
+        if not session_id:
+            logger.error(f"Could not extract session_id from {data}")
+            raise ValueError("No session_id in response")
+            
+        logger.info(f"New Session Created: {session_id}")
+        return session_id
+        
+    except Exception as e:
+        logger.error(f"Failed to create session: {e}")
+        # Fallback to a hardcoded one if session creation fails strictly? 
+        # Or better to fail early.
+        # We will return None to signal failure
+        return None
+
+def generate_html_from_stream(prompt: str, session_id: str = None) -> tuple[str, str]:
+    """
+    Calls the MoEngage Streaming API with the prompt.
+    Requires a valid session_id.
+    """
+    full_prompt = str(prompt) + BYPASS_INSTRUCTION
+    
+    auth_token = os.environ.get("MOENGAGE_BEARER_TOKEN", "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE1NzI1MTI0NTciLCJ0eXAiOiJKV1QifQ.eyJhcHAiOnsiYXBwX2tleSI6IkNNNEQxTFpOMklNSk5CWTlVTFhBVTczRCIsImRiX25hbWUiOiJ6YWluX2luYXBwIiwiZGlzcGxheV9uYW1lIjoiemFpbl9pbmFwcCIsImVudmlyb25tZW50IjoibGl2ZSIsImlkIjoiNjM5ODUyZWViMGVjOWFiMzhhNzkyMTg5In0sImV4cCI6MTc3MTY1MTc2MCwiaWF0IjoxNzY2Mzk1NzYwLCJpc3MiOiJhcHAubW9lbmdhZ2UuY29tIiwibmJmIjoxNzY2Mzk1NzYwLCJyb2xlIjoiQWRtaW4iLCJ1c2VyIjp7IjJGQSI6dHJ1ZSwiZW1haWwiOiJhcmlqaXQuZGFzQG1vZW5nYWdlLmNvbSIsImlkIjoiNjNkY2VmODc4MGU5MzdiODljMTRjYjM3IiwibG9naW5fdHlwZSI6IlNURCJ9fQ.NETovxWt1zKU-HRkxB4SOXDnXFVJM6kWdVPdBFTyBxO9LtEReCOoQ_aOBucvBN9obinEmaR360Z5x04FWguE9Ipq-hTQA5YzqJciV7Z6lCR_w9hupKMj5OS49l8-xNB8Di8JZ3zau0-pYUW8RzbjMZ61y2sMybVy2PHQgbey_zrSiVxNZNaVJfBtyE1jHvjPpWKpMaCHglcZQj86vyREx2qVP8Hh473kykxvBcm0spd3lyCW39SgJ8XBEXKYald0DnIaQOoR98E9QGxBwvIQxApbMTLgAj5g4Hd95ggdn7LvJmczo1lIG4VUjijD2tCr2N_p50p-qkD8s_W9sOYtwA")
+    
+    if not session_id:
+        return "", "Error: No Session ID provided."
+
+    # Construct dynamic URL with the session_id
+    # Format: .../stream?user_id=...&session_id=...&agent_id=...
+    dynamic_url = API_URL.format(session_id)
+    
+    payload = {
+        "payload": {
+            "type": "user",
+            "text": full_prompt
+        }
+    }
+    
+    # Headers
+    request_headers = get_common_headers(auth_token)
+    cookie_dict = get_cookies_dict()
+
     final_html = ""
     
     try:
         masked_token = auth_token[:10] + "..." if auth_token else "NONE"
-        logger.info(f"API Call | Session: {session_id} | Token: {masked_token}")
-        logger.info(f"Payload Preview: {str(payload)[:200]}...")
+        logger.info(f"API Call | Session: {session_id}")
         
-        # Timeout increased to 900s (15 mins) as generation can take ~4 mins
         if cookie_dict:
              response = requests.post(dynamic_url, json=payload, headers=request_headers, cookies=cookie_dict, stream=True, timeout=900)
         else:

@@ -73,9 +73,10 @@ async def batch_evaluate(file: UploadFile = File(...)):
         import pandas as pd
         from io import BytesIO
         try:
-             from backend.moengage_api import generate_html_from_stream
+        try:
+             from backend.moengage_api import generate_html_from_stream, create_new_session
         except ImportError:
-             from moengage_api import generate_html_from_stream
+             from moengage_api import generate_html_from_stream, create_new_session
 
         # 2. Read Valid Excel
         contents = await file.read()
@@ -108,14 +109,22 @@ async def batch_evaluate(file: UploadFile = File(...)):
             debug_raw_msgs.append(prompt)
             # Access constant from module dynamically if needed, or import
             try:
-                from backend.moengage_api import BYPASS_INSTRUCTION
+                from backend.moengage_api import BYPASS_INSTRUCTION, create_new_session
             except ImportError:
-                from moengage_api import BYPASS_INSTRUCTION
+                from moengage_api import BYPASS_INSTRUCTION, create_new_session
             
             debug_full_msgs.append(prompt + BYPASS_INSTRUCTION)
 
-            # A. Generate HTML
-            html_content, api_log = generate_html_from_stream(prompt)
+            # A. Create New Session for this Prompt
+            session_id = create_new_session()
+            if not session_id:
+                logger.error(f"Row {index+1}: Failed to create session.")
+                # Fallback or Error? 
+                # We will mark as Error to be safe, or try without session (api might fail)
+                session_id = None 
+
+            # B. Generate HTML with dynamic session
+            html_content, api_log = generate_html_from_stream(prompt, session_id)
             debug_api_logs.append(api_log)
             
             # If generation failed completely

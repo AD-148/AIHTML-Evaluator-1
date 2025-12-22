@@ -16,30 +16,38 @@ logging.basicConfig(level=logging.INFO)
 sys.path.append(os.path.abspath("backend"))
 
 try:
-    from backend.moengage_api import generate_html_from_stream
+    from backend.moengage_api import generate_html_from_stream, create_new_session
 except ImportError:
     try:
-        from moengage_api import generate_html_from_stream
+        from moengage_api import generate_html_from_stream, create_new_session
     except ImportError:
         sys.path.append(os.path.join(os.getcwd(), 'backend'))
-        from moengage_api import generate_html_from_stream
+        from moengage_api import generate_html_from_stream, create_new_session
 
 prompts = [
     "Create a simple button", 
     "Create a simple input field"
 ]
 
-print("--- Starting Reproduction Test (With Logging) ---")
+print("--- Starting Reproduction Test (Dynamic Sessions) ---")
 
 for i, p in enumerate(prompts):
     print(f"\n--- Processing Prompt {i+1}: {p} ---")
-    # Use default session logic (hardcoded fallback)
-    html, log = generate_html_from_stream(p)
     
-    if html:
-        print(f"Success! Length: {len(html)}")
+    # 1. Create Session
+    session_id = create_new_session()
+    print(f"Created Session: {session_id}")
+    
+    if session_id:
+        # 2. Generate
+        html, log = generate_html_from_stream(p, session_id=session_id)
+        
+        if html:
+            print(f"Success! Length: {len(html)}")
+        else:
+            print(f"Failed! Log: {log}")
     else:
-        print(f"Failed! Log: {log}")
+        print("Failed to create session.")
     
     time.sleep(2)
 
