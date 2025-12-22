@@ -156,9 +156,16 @@ async def batch_evaluate(file: UploadFile = File(...)):
                 
             return result
 
-        # 4. Launch Tasks in Parallel
-        logger.info(f"Processing {len(df)} rows in PARALLEL...")
-        tasks = [process_row(i, r) for i, r in df.iterrows()]
+        # 4. Launch Tasks in Parallel (with Semaphore)
+        # Limit to 5 concurrent API calls to prevent 400 TransferEncodingError
+        sem = asyncio.Semaphore(5)
+
+        async def process_row_with_sem(index, row):
+             async with sem:
+                 return await process_row(index, row)
+
+        logger.info(f"Processing {len(df)} rows in PARALLEL (Concurrency restricted to 5)...")
+        tasks = [process_row_with_sem(i, r) for i, r in df.iterrows()]
         results = await asyncio.gather(*tasks)
         
         # 5. Map Results back to DataFrame Columns
