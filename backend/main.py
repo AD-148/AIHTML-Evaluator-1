@@ -73,7 +73,6 @@ async def batch_evaluate(file: UploadFile = File(...)):
         import pandas as pd
         from io import BytesIO
         try:
-        try:
              from backend.moengage_api import generate_html_from_stream, create_new_session
         except ImportError:
              from moengage_api import generate_html_from_stream, create_new_session
