@@ -11,9 +11,12 @@ BYPASS_INSTRUCTION = " Do not ask for clarification. If details are missing, mak
 # Configuration (Should be in .env, but defaults provided for immediate usage)
 # Configuration (Should be in .env, but defaults provided for immediate usage)
 API_BASE = "https://html-ai-template.moestaging.com/api/v1/bff"
-API_URL = f"{API_BASE}/response/stream?user_id=arijit.das@moengage.com&session_id={{}}&agent_id=inapp-html-ai-v1"
+API_URL = f"{API_BASE}/response/stream?user_id=sweta.agarwal@moengage.com&session_id={{}}&agent_id=inapp-html-ai-v1"
 SESSION_URL = f"{API_BASE}/sessions"
 
+# Headers from User CURL
+# Note: In a real prod env, these should be rotated and loaded from secrets.
+HEADERS = {
 # Headers from User CURL
 # Note: In a real prod env, these should be rotated and loaded from secrets.
 HEADERS = {
@@ -21,18 +24,18 @@ HEADERS = {
     "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
     "content-type": "application/json",
     # "authorization": "Bearer ...", # Loaded from env or fallback
-    "moetraceid": "4b98eba2-170d-491b-a6b4-926731212e28",
+    "moetraceid": "12d514c2-8c7a-4834-8701-299cfe141182",
     "origin": "https://html-ai-template.moestaging.com",
-    "page": "inapp/edit/69491f364e66b370a00fb246",
+    "page": "inapp/create/",
     "priority": "u=1, i",
-    "refreshtoken": "26a480a6-f3f5-44c5-83e8-01d763c6237b",
-    "sec-ch-ua": '"Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"',
+    "refreshtoken": "0e53c5e6-57c1-4522-85c2-dcff3946d41b",
+    "sec-ch-ua": '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
     "sec-ch-ua-mobile": "?0",
     "sec-ch-ua-platform": '"macOS"',
     "sec-fetch-dest": "empty",
     "sec-fetch-mode": "cors",
     "sec-fetch-site": "same-origin",
-    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
 }
 
 import uuid
@@ -45,7 +48,7 @@ def get_common_headers(auth_token):
     return req_headers
 
 def get_cookies_dict():
-    cookies_header = os.environ.get("MOENGAGE_COOKIES", "_scid=AsJJr3gxvsEOCULspgBrYvrXBS_ySPrc; _scid_r=AsJJr3gxvsEOCULspgBrYvrXBS_ySPrc; moe_c_s=1; ajs_user_id=CM4D1LZN2IMJNBY9ULXAU73Darijit.das@moengage.com; ajs_anonymous_id=%22ea9738f6-abd4-4da6-9ebe-5eeee784908f%22; moe_uuid=07eb325d-7fd9-4a33-abea-bffc5de3030e; moe_u_d=HcfBCoAgDADQf9m5HdKps58R1xQCIcg8Rf-edHwP9HQ2ha3m1ssCmrJqmb6v8XMcExCDtdUbi1F2QmJyKCQe2busVQKzWeH9AA; moe_s_n=RYo7DsIwDEDv4jmRHOI6ca6CkNX8JISAId0Qd2_TpeP7_GDoCxJ0pl5IxLbWnSUqxa61kvVrZrqFHHPNYI556AbJBWZyXgR5cdO-TxsRDRR96jbx_pilXf8SBANGAx_96oDk_zs")
+    cookies_header = os.environ.get("MOENGAGE_COOKIES", "moe_c_s=1; moe_uuid=df642ebc-c7cd-47d4-8497-c0557dfe9f73; moe_u_d=HcdBCoAgEAXQu8y6gZzEssuIMX8gEILMVXT3xOV7qaarKO2WS8VEmrIqup-7Dbazg2SGAC6yEwH7RT1nOwLLFiNWCwYP-n4; moe_s_n=RcpBDoQgDIXhu3QtSUHbKleZTBoESSYTdYE7490FNy7f_74Tiv7Bw0g25RzYpGCtGSY3m9DjbGJORCJDWKKDruKiB3grzITkeGLqW12fOiJ2EPWnR5ufb3uW1wtWL5VsumsBT9cN")
     cookie_dict = {}
     if cookies_header:
         try:
@@ -62,13 +65,13 @@ def create_new_session() -> str:
     Creates a new session via the /sessions endpoint.
     Returns the session_id string.
     """
-    auth_token = os.environ.get("MOENGAGE_BEARER_TOKEN", "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE1NzI1MTI0NTciLCJ0eXAiOiJKV1QifQ.eyJhcHAiOnsiYXBwX2tleSI6IkNNNEQxTFpOMklNSk5CWTlVTFhBVTczRCIsImRiX25hbWUiOiJ6YWluX2luYXBwIiwiZGlzcGxheV9uYW1lIjoiemFpbl9pbmFwcCIsImVudmlyb25tZW50IjoibGl2ZSIsImlkIjoiNjM5ODUyZWViMGVjOWFiMzhhNzkyMTg5In0sImV4cCI6MTc3MTY1MTc2MCwiaWF0IjoxNzY2Mzk1NzYwLCJpc3MiOiJhcHAubW9lbmdhZ2UuY29tIiwibmJmIjoxNzY2Mzk1NzYwLCJyb2xlIjoiQWRtaW4iLCJ1c2VyIjp7IjJGQSI6dHJ1ZSwiZW1haWwiOiJhcmlqaXQuZGFzQG1vZW5nYWdlLmNvbSIsImlkIjoiNjNkY2VmODc4MGU5MzdiODljMTRjYjM3IiwibG9naW5fdHlwZSI6IlNURCJ9fQ.NETovxWt1zKU-HRkxB4SOXDnXFVJM6kWdVPdBFTyBxO9LtEReCOoQ_aOBucvBN9obinEmaR360Z5x04FWguE9Ipq-hTQA5YzqJciV7Z6lCR_w9hupKMj5OS49l8-xNB8Di8JZ3zau0-pYUW8RzbjMZ61y2sMybVy2PHQgbey_zrSiVxNZNaVJfBtyE1jHvjPpWKpMaCHglcZQj86vyREx2qVP8Hh473kykxvBcm0spd3lyCW39SgJ8XBEXKYald0DnIaQOoR98E9QGxBwvIQxApbMTLgAj5g4Hd95ggdn7LvJmczo1lIG4VUjijD2tCr2N_p50p-qkD8s_W9sOYtwA")
+    auth_token = os.environ.get("MOENGAGE_BEARER_TOKEN", "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE1NzI1MTI0NTciLCJ0eXAiOiJKV1QifQ.eyJhcHAiOnsiYXBwX2tleSI6IkNNNEQxTFpOMklNSk5CWTlVTFhBVTczRCIsImRiX25hbWUiOiJ6YWluX2luYXBwIiwiZGlzcGxheV9uYW1lIjoiemFpbl9pbmFwcCIsImVudmlyb25tZW50IjoibGl2ZSIsImlkIjoiNjM5ODUyZWViMGVjOWFiMzhhNzkyMTg5In0sImV4cCI6MTc3MTczMDIzOSwiaWF0IjoxNzY2NDc0MjM5LCJpc3MiOiJhcHAubW9lbmdhZ2UuY29tIiwibmJmIjoxNzY2NDc0MjM5LCJyb2xlIjoiQWRtaW4iLCJ1c2VyIjp7IjJGQSI6dHJ1ZSwiZW1haWwiOiJzd2V0YS5hZ2Fyd2FsQG1vZW5nYWdlLmNvbSIsImlkIjoiNjIxZGE5ZDlhMGRmOThmNDkwMzIyYjgzIiwibG9naW5fdHlwZSI6IlNURCJ9fQ.fT5PL9PSZcT17XS5YC5Cky5n9W6-KFaNiKGSlq3Fglag8X5UiUEg4egRYIhf4YoZ6KxiGC-ppxYrvhrV8vE0XKmBESLLbqvoPtJ_hO7iXdStlnmTdpW3cKY4cyZmT3tkfFqLoXJX7srFDgE-w1z-ytITuchcitYUyCVw-FRM5kCh7KSJihBP0HzBw_P82i9iJi-3t0OxIRilWc36FmMMVasYtz2_tM00DU9qNGMOmq6BUAg-OtHia5HiSq14j1xylH0rof4OOP4zHf1LVIf7cOj5htUQooucrtOJQUPfRwFWrCEJ_zFjOfg1fUJwzy9c05xv44tzeuQatU9HL1Li6g")
     
     headers = get_common_headers(auth_token)
     cookie_dict = get_cookies_dict()
     
     # Payload for session creation (from CURL)
-    payload = {"user_id": "arijit.das@moengage.com", "agent_id": "inapp-html-ai-v1"}
+    payload = {"user_id": "sweta.agarwal@moengage.com", "agent_id": "inapp-html-ai-v1"}
     
     try:
         logger.info("Creating new session...")
@@ -107,7 +110,7 @@ def generate_html_from_stream(prompt: str, session_id: str = None) -> tuple[str,
     """
     full_prompt = str(prompt) + BYPASS_INSTRUCTION
     
-    auth_token = os.environ.get("MOENGAGE_BEARER_TOKEN", "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE1NzI1MTI0NTciLCJ0eXAiOiJKV1QifQ.eyJhcHAiOnsiYXBwX2tleSI6IkNNNEQxTFpOMklNSk5CWTlVTFhBVTczRCIsImRiX25hbWUiOiJ6YWluX2luYXBwIiwiZGlzcGxheV9uYW1lIjoiemFpbl9pbmFwcCIsImVudmlyb25tZW50IjoibGl2ZSIsImlkIjoiNjM5ODUyZWViMGVjOWFiMzhhNzkyMTg5In0sImV4cCI6MTc3MTY1MTc2MCwiaWF0IjoxNzY2Mzk1NzYwLCJpc3MiOiJhcHAubW9lbmdhZ2UuY29tIiwibmJmIjoxNzY2Mzk1NzYwLCJyb2xlIjoiQWRtaW4iLCJ1c2VyIjp7IjJGQSI6dHJ1ZSwiZW1haWwiOiJhcmlqaXQuZGFzQG1vZW5nYWdlLmNvbSIsImlkIjoiNjNkY2VmODc4MGU5MzdiODljMTRjYjM3IiwibG9naW5fdHlwZSI6IlNURCJ9fQ.NETovxWt1zKU-HRkxB4SOXDnXFVJM6kWdVPdBFTyBxO9LtEReCOoQ_aOBucvBN9obinEmaR360Z5x04FWguE9Ipq-hTQA5YzqJciV7Z6lCR_w9hupKMj5OS49l8-xNB8Di8JZ3zau0-pYUW8RzbjMZ61y2sMybVy2PHQgbey_zrSiVxNZNaVJfBtyE1jHvjPpWKpMaCHglcZQj86vyREx2qVP8Hh473kykxvBcm0spd3lyCW39SgJ8XBEXKYald0DnIaQOoR98E9QGxBwvIQxApbMTLgAj5g4Hd95ggdn7LvJmczo1lIG4VUjijD2tCr2N_p50p-qkD8s_W9sOYtwA")
+    auth_token = os.environ.get("MOENGAGE_BEARER_TOKEN", "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE1NzI1MTI0NTciLCJ0eXAiOiJKV1QifQ.eyJhcHAiOnsiYXBwX2tleSI6IkNNNEQxTFpOMklNSk5CWTlVTFhBVTczRCIsImRiX25hbWUiOiJ6YWluX2luYXBwIiwiZGlzcGxheV9uYW1lIjoiemFpbl9pbmFwcCIsImVudmlyb25tZW50IjoibGl2ZSIsImlkIjoiNjM5ODUyZWViMGVjOWFiMzhhNzkyMTg5In0sImV4cCI6MTc3MTczMDIzOSwiaWF0IjoxNzY2NDc0MjM5LCJpc3MiOiJhcHAubW9lbmdhZ2UuY29tIiwibmJmIjoxNzY2NDc0MjM5LCJyb2xlIjoiQWRtaW4iLCJ1c2VyIjp7IjJGQSI6dHJ1ZSwiZW1haWwiOiJzd2V0YS5hZ2Fyd2FsQG1vZW5nYWdlLmNvbSIsImlkIjoiNjIxZGE5ZDlhMGRmOThmNDkwMzIyYjgzIiwibG9naW5fdHlwZSI6IlNURCJ9fQ.fT5PL9PSZcT17XS5YC5Cky5n9W6-KFaNiKGSlq3Fglag8X5UiUEg4egRYIhf4YoZ6KxiGC-ppxYrvhrV8vE0XKmBESLLbqvoPtJ_hO7iXdStlnmTdpW3cKY4cyZmT3tkfFqLoXJX7srFDgE-w1z-ytITuchcitYUyCVw-FRM5kCh7KSJihBP0HzBw_P82i9iJi-3t0OxIRilWc36FmMMVasYtz2_tM00DU9qNGMOmq6BUAg-OtHia5HiSq14j1xylH0rof4OOP4zHf1LVIf7cOj5htUQooucrtOJQUPfRwFWrCEJ_zFjOfg1fUJwzy9c05xv44tzeuQatU9HL1Li6g")
     
     if not session_id:
         return "", "Error: No Session ID provided."

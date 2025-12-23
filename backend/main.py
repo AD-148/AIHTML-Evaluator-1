@@ -157,8 +157,8 @@ async def batch_evaluate(file: UploadFile = File(...)):
             return result
 
         # 4. Launch Tasks in Parallel (with Semaphore)
-        # Limit to 5 concurrent API calls to prevent 400 TransferEncodingError
-        sem = asyncio.Semaphore(5)
+        # Limit to 2 concurrent API calls to prevent 400 TransferEncodingError AND Playwright Timeouts
+        sem = asyncio.Semaphore(2)
 
         async def process_row_with_sem(index, row):
              async with sem:
