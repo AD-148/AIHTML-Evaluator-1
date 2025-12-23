@@ -17,9 +17,6 @@ SESSION_URL = f"{API_BASE}/sessions"
 # Headers from User CURL
 # Note: In a real prod env, these should be rotated and loaded from secrets.
 HEADERS = {
-# Headers from User CURL
-# Note: In a real prod env, these should be rotated and loaded from secrets.
-HEADERS = {
     "accept": "application/json",
     "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
     "content-type": "application/json",
