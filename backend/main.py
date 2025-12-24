@@ -102,6 +102,7 @@ async def batch_evaluate(file: UploadFile = File(...)):
                 "Score_Accessibility": 0,
                 "Score_Responsiveness": 0,
                 "Score_Syntax": 0,
+                "Score_Interactive": 0,
                 "Verdict": "ERROR",
                 "Rationale": "Processing Error",
                 "Test_Log": ""
@@ -144,6 +145,7 @@ async def batch_evaluate(file: UploadFile = File(...)):
                 result["Score_Accessibility"] = eval_result.score_accessibility
                 result["Score_Responsiveness"] = eval_result.score_responsiveness
                 result["Score_Syntax"] = getattr(eval_result, 'score_syntax', 0)
+                result["Score_Interactive"] = getattr(eval_result, 'score_interactive', 0)
                 
                 result["Verdict"] = eval_result.final_judgement
                 result["Rationale"] = eval_result.rationale
@@ -157,14 +159,14 @@ async def batch_evaluate(file: UploadFile = File(...)):
             return result
 
         # 4. Launch Tasks in Parallel (with Semaphore)
-        # Limit to 2 concurrent API calls to prevent 400 TransferEncodingError AND Playwright Timeouts
-        sem = asyncio.Semaphore(2)
+        # Limit to 3 concurrent API calls as per user request (Safe Bet)
+        sem = asyncio.Semaphore(3)
 
         async def process_row_with_sem(index, row):
              async with sem:
                  return await process_row(index, row)
 
-        logger.info(f"Processing {len(df)} rows in PARALLEL (Concurrency restricted to 5)...")
+        logger.info(f"Processing {len(df)} rows in PARALLEL (Concurrency restricted to 3)...")
         tasks = [process_row_with_sem(i, r) for i, r in df.iterrows()]
         results = await asyncio.gather(*tasks)
         

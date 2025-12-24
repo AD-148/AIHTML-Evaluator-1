@@ -203,26 +203,33 @@ Output JSON: {
 
 PROMPT_SDK_INTERACTION = """
 You are an SDK Integration Specialist.
-Analyze the 'Flight Recorder' logs to verify functionality.
+Analyze the 'Flight Recorder' logs to verify User Interaction Flow.
 MAX SCORE: 10.
 
 INPUT DATA:
-1. **Interaction Logs**: (List of strings starting with `[MockSDK]`, `[CONSOLE]`, or `[ERROR]`).
+1. **Interaction Logs**: (List of strings starting with `[MockSDK]`, `[DOM_CHANGE]`, or `[ERROR]`).
 
 INSTRUCTIONS:
-1. **The "Shim" Validation**:
-   - Look for logs starting with `[MockSDK]`.
-   - **SUCCESS**: If a button click log is followed by a `[MockSDK]` log (e.g., `[MockSDK] MoEngage: trackEvent`), this proves the integration works.
-2. **Error Handling**:
-   - **IGNORE**: "moengage is not defined" (Our shim handles this, but if it slips through, ignore it).
-   - **PENALIZE**: Genuine JS errors like `TypeError: Cannot read property` or `Uncaught SyntaxError`. **Deduct 2 per error**.
-3. **Broken Interactions**:
-   - If the log shows "Attempting click on Button..." but NO subsequent `[MockSDK]` or navigation log appears, the button is dead. **DEDUCT 3**.
+1. **Classify Interaction Types**:
+   - **Type A: Selection Buttons** (e.g., Ratings, Radio, Options). 
+     - **SUCCESS**: If the log shows `[DOM_CHANGE]` (e.g., class changed, "selected" added).
+     - **Note**: These do NOT need to trigger `[MockSDK]` immediately.
+   - **Type B: Primary Actions** (e.g., Submit, Close, Next).
+     - **SUCCESS**: If the log shows `[MockSDK]` event (e.g., `trackEvent`, `dismissMessage`) OR navigation.
+
+2. **Evaluate The Flow**:
+   - Look for the "Unlocking" pattern: Did clicking Type A buttons eventually lead to `[DOM_CHANGE] Submit Button is now ENABLED`? 
+   - If the Submit button was initially disabled but became enabled after interactions, **SCORE THIS HIGHLY**.
+
+3. **Defect Detection**:
+   - **Dead Buttons**: Button clicked -> No `[DOM_CHANGE]` AND No `[MockSDK]`. **DEDUCT 3**.
+   - **Broken Submit**: If Submit button is clicked but logic fails (no event). **DEDUCT 3**.
+
 4. **Scoring**:
-   - **10**: Interaction triggers `[MockSDK]` logs perfectly.
-   - **8**: Works, but some benign console warnings.
-   - **4-6**: Button clicks recorded, but NO SDK event triggered.
-   - **0-3**: JavaScript crashes prevents any interaction.
+   - **10**: Perfect Flow (Selections update UI -> Submit triggers SDK).
+   - **8**: Buttons react visually, but SDK event is missing on final submit.
+   - **5**: Buttons click but show no visual feedback (no class change).
+   - **0-3**: JS Errors or unclickable elements.
 
 Output JSON: {
     "step_by_step_reasoning": "string",

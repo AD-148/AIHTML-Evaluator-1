@@ -440,16 +440,65 @@ class AdvancedAnalyzer:
                                 html_before = await page.content()
                                 url_before = page.url
                                 
-                                # Interact
+                                # Interact & Observe DOM (User Request: Capture State Changes for selection buttons)
                                 try:
+                                    # 1. State BEFORE
+                                    try:
+                                        old_class = await el.get_attribute("class") or ""
+                                        old_disabled = await el.is_disabled()
+                                    except:
+                                         old_class = ""
+                                         old_disabled = False
+
                                     if tag == 'select':
                                         # Handle Select Dropdowns
-                                        # Use heuristics to pick a value? Or just first option.
                                         opts = await el.locator('option').all_text_contents()
                                         if opts:
-                                            # Pick the second option if available (usually first is "Select...")
+                                            # Pick the second option if available
                                             val = opts[1] if len(opts) > 1 else opts[0]
                                             await el.select_option(label=val)
+                                    elif tag in ['input', 'textarea']:
+                                        if itype in ['radio', 'checkbox']:
+                                            await el.click(timeout=1000)
+                                        else:
+                                            # Text Input
+                                            await el.fill("Test Input")
+                                    else:
+                                        # Standard Click
+                                        await el.click(timeout=1000)
+                                    
+                                    # Wait for potential JS
+                                    await page.wait_for_timeout(300)
+
+                                    # 2. State AFTER
+                                    try:
+                                        new_class = await el.get_attribute("class") or ""
+                                        new_disabled = await el.is_disabled()
+                                    except:
+                                        new_class = ""
+                                        new_disabled = False # if element removed, treat as enabled? No, treat as gone.
+                                    
+                                    # 3. DOM CHANGE DETECTION
+                                    # Check for Class Changes (Visual Feedback)
+                                    if old_class != new_class:
+                                        self.logs["mobile_logs"].append(f"[DOM_CHANGE] Button visual state updated. Class: '{old_class}' -> '{new_class}'")
+                                        self._log_trace("art", f"[DOM_CHANGE] Visual update detected on {desc}")
+                                        
+                                    # Check for Enable/Disable Toggle (Logic Feedback)
+                                    if old_disabled != new_disabled:
+                                        status = "ENABLED" if not new_disabled else "DISABLED"
+                                        self.logs["mobile_logs"].append(f"[DOM_CHANGE] Element became {status}.")
+                                        self._log_trace("unlock", f"[DOM_CHANGE] Element became {status}")
+                                        
+                                    # Check GLOBAL Submit Button (Did this unlock the submit button?)
+                                    # Heuristic: Find button with 'submit' text or type
+                                    submit_btn = page.locator("button:has-text('Submit'), input[type='submit']")
+                                    if await submit_btn.count() > 0:
+                                         is_submit_disabled = await submit_btn.first.is_disabled()
+                                         # If we don't have previous state for submit, we just log its current state if enabled
+                                         if not is_submit_disabled:
+                                              # Log it as a significant event
+                                              self.logs["mobile_logs"].append("[DOM_CHANGE] Submit Button is currently ENABLED.")
                                             self.logs["mobile_logs"].append(f"Round {current_round+1}: Selected '{val}' in {desc}")
                                             self._log_trace("ballot_box_with_check", f"[PASS] Mobile: Selected option '{val}' in <select>.")
                                             # Mark as "Action Taken" but don't force break round unless UI updates
