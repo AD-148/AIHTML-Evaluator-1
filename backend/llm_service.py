@@ -36,11 +36,12 @@ if not os.getenv("GEMINI_API_KEY"):
 
 # Data Models
 class EvaluationResult(BaseModel):
-    score_fidelity: int = Field(..., description="0-100 score for how well the HTML matches the user's request")
-    score_syntax: int = Field(..., description="0-100 score for HTML syntax correctness")
-    score_accessibility: int = Field(..., description="0-100 score for accessibility standards (WCAG)")
-    score_responsiveness: int = Field(..., description="0-100 score for mobile SDK adaptability")
-    score_visual: int = Field(..., description="0-100 score for visual aesthetics and premium design quality")
+    score_fidelity: int = Field(..., description="0-10 score for how well the HTML matches the user's request")
+    score_syntax: int = Field(..., description="0-10 score for HTML syntax correctness")
+    score_accessibility: int = Field(..., description="0-10 score for accessibility standards (WCAG)")
+    score_responsiveness: int = Field(..., description="0-10 score for mobile adaptability")
+    score_visual: int = Field(..., description="0-10 score for visual aesthetics and premium design quality")
+    score_interactive: int = Field(..., description="0-10 score for SDK interactions and event handling")
     rationale: str = Field(..., description="Detailed explanation of the scores. Explicitly mention any criteria scoring below 70.")
     final_judgement: str = Field(..., description="Brief summary judgement")
     fixed_html: Optional[str] = Field(None, description="The improved/fixed HTML code if requested by the user")
@@ -48,190 +49,222 @@ class EvaluationResult(BaseModel):
 
 # Prompts for Specialized Agents
 
-PROMPT_FIDELITY = """
-You are a QC Specialist and Requirements Auditor.
-Your goal is to verify if the HTML satisfies the user's request with 100% precision.
 
-INPUT:
-- User HTML Code
-- SYSTEM REPORT (UI Inventory): Count of elements and computed styles (e.g. Real Button Color).
+PROMPT_FIDELITY = """
+You are a QC Specialist.
+Your goal is to verify if the HTML satisfies the user's request based on the UI Inventory.
+
+INPUT DATA:
+1. **User Requirement**: (Summary of what user wanted)
+2. **HTML Code**: (The raw code)
+3. **UI Inventory**: (List of detected elements: buttons, inputs, headings)
 
 INSTRUCTIONS:
-1. **CITATION REQUIRED**: You MUST quote the System Report data in your rationale.
-   - Example: "System Report found 3 Buttons and 1 Input, which matches the user request."
-   - DO NOT say "It matches perfectly" without the numbers.
-2. **Compare Inventory**: 
-   - If User asked for "Blue Button" and Report says "Primary Button Computed Style: rgb(255, 0, 0)" (Red), DEDUCT points.
-   - If User asked for "3 Inputs" and Report says "Found 1 Input", DEDUCT points.
-3. **Evaluate Dimensions**:
-   - **Feature Policing** (Crucial): Check presence of all elements.
-   - **Visual Accuracy**: Check styles against request.
-
-### SCORING RUBRIC (FEW-SHOT EXAMPLES):
-- **Scenario A**: User asked for "Login Form with Google Button". HTML has form but Inventory says "Buttons: 1" (Submit only).
-  - Score: 60
-  - Rationale: "System Report found only 1 Button. User requested 2 (Login + Google)."
-- **Scenario B**: User asked for "Blue Card". Report says "Primary BG: rgb(255, 255, 255)".
-  - Score: 75
-  - Rationale: "Functional elements match, but Visual data shows background is White (rgb 255,255,255), not Blue."
+1. **CRITICAL INTENT CHECK (Pass/Fail)**:
+   - Compare the 'User Requirement' against the 'UI Inventory'.
+   - **FAIL (Score 0-1)**: If the user asked for a "Login Page" but the inventory shows a "Dashboard" or "Article".
+   - **Rationale**: Must explicitly state: "Prompt Mismatch: Requested [X], but HTML structure indicates [Y]."
+2. **Feature Matching**:
+   - Check for specific requested elements (e.g., "Email Input", "Submit Button").
+   - If a core element is missing, max score is 5.
+3. **Scoring**:
+   - **10**: Perfect intent match + All elements present.
+   - **8-9**: Intent matches, but placeholder text or minor labels differ.
+   - **5-7**: Core feature exists, but missing secondary requirements (e.g., missing "Forgot Password" link).
+   - **0-1**: Completely wrong feature.
 
 Output JSON: {
-    "step_by_step_reasoning": "Checked Inventory: Found X buttons... Compared to request...",
+    "step_by_step_reasoning": "string",
     "score_fidelity": int,
     "rationale_fidelity": "string"
 }
 """
 
 PROMPT_ACCESSIBILITY = """
-You are an expert Accessibility Auditor (WCAG 2.1 AAA).
-Your goal is to evaluate the ACCESSIBILITY of the provided HTML based on the provided SYSTEM REPORT.
+You are an Accessibility Auditor.
+Calculate the score based strictly on the Axe-Core System Report.
+MAX SCORE: 10.
 
-INPUT:
-- User HTML Code
-- SYSTEM REPORT (Truth Source): Contains strict logs of missing alts, contrast issues, etc.
+INPUT DATA:
+1. **Axe-Core Report**: (JSON list of violations: 'color-contrast', 'image-alt', 'label', etc.)
 
 INSTRUCTIONS:
-1. **Trust the System Report**: If the report says "Image missing alt", it IS missing. Do not debate it.
-2. **Score Cap**: The report may define a "Score Cap" (e.g. Max 60). You CANNOT score higher than this cap.
-3. **Deductions**:
-   - Critical Violations (e.g. missing alt, no labels): -20 points each.
-   - Serious Violations (e.g. contrast): -10 points each.
-4. **Rationale**:
-   - First, list the Critical/Serious violations found by the System.
-   - Then, add any manual observations.
+1. **Violation Calculation (Strict Math)**:
+   - Start with **10 Points**.
+   - For EACH unique violation type reported by Axe-Core, **SUBTRACT 2 POINTS**.
+   - *Example*: If report contains ["color-contrast", "image-alt"], Score = 10 - 2 - 2 = 6.
+2. **Critical Failure**:
+   - If the report lists "critical" impact violations (like missing form labels), ensure the score does not exceed 6.
+3. **Zero Bound**:
+   - Minimum score is 0.
 
-Output JSON: {"score_accessibility": int, "rationale_accessibility": "string"}
+Output JSON: {
+    "score_accessibility": int,
+    "rationale_accessibility": "string"
+}
 """
 
 PROMPT_VISUAL_DESIGN = """
-You are a World-Class Creative Director and UI/UX Designer.
-Your goal is to ensure the designs are PREMIUM, MODERN, and "WOW" the user.
+You are a Senior UI Designer.
+Evaluate the visual quality based on the Computed Style DNA.
+MAX SCORE: 10.
 
-INPUT:
-- User HTML Code
-- SYSTEM REPORT (Style DNA): Detected Fonts and CSS Features.
+INPUT DATA:
+1. **Style DNA** (JSON):
+   - `typography`: Font family used on body.
+   - `button_aesthetics`: Computed styles (padding, radius, shadow) of the primary button.
+   - `layout_engine`: The display property of the main container (block, flex, grid).
+2. **HTML Code**.
 
 INSTRUCTIONS:
-1. **Analyze Signals**:
-   - If Report says "Generic/Outdated Font (Times New Roman)", score MUST match "1995 Web" level (< 60).
-   - If Report says "Detected Shadows, Gradients", score is boosted (70-90 range depending on harmony).
-   - If Report says "flat/basic design", score can max out at 70 (Bootstrap level).
+1. **Typography Check (Field: `typography`)**:
+   - Check if the font string contains "Times New Roman", "serif" (without specific font), or is empty.
+   - **DEDUCT 3** if generic/dated fonts are used.
+   - **PASS** if "Inter", "Roboto", "System UI", "Sans-Serif", or specific Google Fonts are found.
 
-Evaluate PURE AESTHETICS (Ignore functional requirements, focus on looks):
-1. **Alignment & Spacing**:
-   - Are elements perfectly aligned? Is whitespace consistent?
-   - Deduct points for sloppy margins or misalignment.
-2. **Visual Appeal**:
-   - Is it "pretty" or "generic"? (Generic white/grey box = Max 60 score).
-   - Usage of shadows, rounded corners, gradients, glassmorphism.
-   - Typography hierarchies (Good contrast, readable fonts).
+2. **Button Sophistication (Field: `button_aesthetics`)**:
+   - If value is "No Buttons Found", skip this check (unless user requested a button).
+   - **Check Radius**: If `borderRadius` is "0px" (sharp box), it indicates unstyled HTML. **DEDUCT 2**.
+   - **Check Padding**: If `padding` is small (e.g., "1px 6px"), it mimics a default browser button. **DEDUCT 2**.
+   - **Check Shadow**: If `boxShadow` is "none" AND background is default gray, it looks plain. **DEDUCT 1**.
 
-### SCORING RUBRIC (FEW-SHOT EXAMPLES):
-- **Score 95-100**: Modern, ample whitespace, subtle shadows, custom font (Inter/Roboto), consistent color palette. Looks like a Dribbble shot.
-- **Score 70-80**: Standard Bootstrap-like look. Clean but boring. Default blue links or buttons.
-- **Score 40-60**: "1995 Web". Times New Roman, zero CSS padding, default browser borders. 
-- **Score <40**: Broken layout, overlapping text.
+3. **Layout Logic (Field: `layout_engine`)**:
+   - **Check Display**: If `layout_engine` is "block" and the HTML relies on `<br>` tags for spacing, **DEDUCT 2**.
+   - **PASS** if `flex` or `grid` is detected.
+
+4. **Scoring Summary**:
+   - **10**: Modern fonts + Flex/Grid + styled buttons (padding > 8px, radius > 4px).
+   - **7-8**: Good layout but boring typography.
+   - **0-6**: "Times New Roman", default gray buttons, or broken layout.
 
 Output JSON: {
-    "step_by_step_reasoning": "Analyzed alignment... Checked typography...",
+    "step_by_step_reasoning": "string",
     "score_visual": int,
     "rationale_visual": "string"
 }
-If the design looks like a basic 1990s or 2000s page, score_visual MUST be < 50.
 """
 
 PROMPT_MOBILE_SDK = """
-You are a Mobile Platform Engineer specializing in WebView integrations (iOS/Android).
-Your goal is to ensure this HTML renders perfectly in a Mobile SDK environment.
+You are a Mobile QA Engineer.
+Evaluate mobile rendering based on Viewport Logs.
+MAX SCORE: 10.
 
-INPUT:
-- User HTML Code
-- SYSTEM REPORT (Truth Source): Logs from Mobile Viewport Simulations (iPhone 12 & Samsung/Android).
+INPUT DATA:
+1. **Mobile Simulation Logs**: (Contains 'scrollWidth', 'clientWidth', and element overlaps).
 
 INSTRUCTIONS:
-1. **Trust the Simulation**: 
-   - If the log says "Target #1 FAILED TAP", it is a critical failure (-20 pts).
-   - If the log says "Runtime Errors Detected", deduct -15 pts.
-   - If "LANDSCAPE FAIL" is present, deduct -10 pts.
-2. **Evaluate**:
-   - **Cross-Platform**: Check if design works on "Viewport Verified: 390x844" (iOS).
-   - **OS Compatibility**: `safe-area-inset`, `-webkit-` prefixes.
-   - **Viewport**: Must have correct `<meta name="viewport">`.
-   - **Orientation**: Check if design works in both Portrait and Landscape (via logs).
-   - **Touch Targets**: Check simulation logs for tappability.
-   - **Scrolling**: No horizontal scrolling.
+1. **Overflow Check (Horizontal Scroll)**:
+   - Scan logs for: "scrollWidth > clientWidth".
+   - If `scrollWidth` is significantly larger than `clientWidth` (indicating horizontal scroll), **SCORE = 4 IMMEDIATELY**.
+2. **Fixed Width Penalty**:
+   - Look for elements with fixed widths (e.g., `width: 800px`) in the CSS/Logs.
+   - If fixed width > 350px exists, **DEDUCT 3** (It will break on mobile).
+3. **Scoring**:
+   - **10**: No overflow, fluid widths (%), media queries present.
+   - **7-9**: Minor padding issues detected in logs.
+   - **0-6**: Horizontal scroll detected or fixed large widths found.
 
 Output JSON: {
-    "step_by_step_reasoning": "Checked viewport... Analyzed simulation logs...",
+    "step_by_step_reasoning": "string",
     "score_responsiveness": int,
     "rationale_responsiveness": "string"
 }
 """
 
 PROMPT_SYNTAX = """
-You are a Senior Frontend Architect.
-Evaluate the code quality, syntax validity, and JavaScript interactivity.
+You are a Frontend Architect.
+Evaluate code quality.
+MAX SCORE: 10.
 
-INPUT:
-- User HTML Code
-- SYSTEM REPORT (Syntax Logs): HTML5 Validator & BS4 Structural Checks.
+INPUT DATA:
+1. **HTML Code**.
+2. **Syntax Logs**: (Console errors regarding parsing).
 
 INSTRUCTIONS:
-1. **Trust Syntax Logs**:
-   - If Report says "Missing <!DOCTYPE>", deduct 10 pts.
-   - If Report says "Tags not closed" or "Nesting error", deduct strict points.
-2. **Evaluate**:
-   - **Clean Code**: Proper nesting, valid tags.
-   - **Interactivity**: 
-     - If User requested logic (e.g. "Calculate"), check if JS exists and works.
-     - No dead script tags.
+1. **Structure Check**:
+   - Valid DOCTYPE?
+   - Properly closed tags?
+   - Clean indentation?
+2. **Logic Validation**:
+   - If User Requirement asked for JS logic (e.g., "calculate total"), check if `<script>` exists.
+   - If logic is missing, **DEDUCT 4**.
+3. **Scoring**:
+   - **10**: Valid, clean, logical.
+   - **8**: Minor formatting issues.
+   - **<6**: Broken tags, missing required JS logic.
 
 Output JSON: {
-    "step_by_step_reasoning": "Checked tag validity... Verified JS...",
+    "step_by_step_reasoning": "string",
     "score_syntax": int,
     "rationale_syntax": "string",
-    "fixed_html": "string (FULL fixed HTML code if improvements needed, else null)"
+    "fixed_html": "string or null"
+}
+"""
+
+PROMPT_SDK_INTERACTION = """
+You are an SDK Integration Specialist.
+Analyze the 'Flight Recorder' logs to verify functionality.
+MAX SCORE: 10.
+
+INPUT DATA:
+1. **Interaction Logs**: (List of strings starting with `[MockSDK]`, `[CONSOLE]`, or `[ERROR]`).
+
+INSTRUCTIONS:
+1. **The "Shim" Validation**:
+   - Look for logs starting with `[MockSDK]`.
+   - **SUCCESS**: If a button click log is followed by a `[MockSDK]` log (e.g., `[MockSDK] MoEngage: trackEvent`), this proves the integration works.
+2. **Error Handling**:
+   - **IGNORE**: "moengage is not defined" (Our shim handles this, but if it slips through, ignore it).
+   - **PENALIZE**: Genuine JS errors like `TypeError: Cannot read property` or `Uncaught SyntaxError`. **Deduct 2 per error**.
+3. **Broken Interactions**:
+   - If the log shows "Attempting click on Button..." but NO subsequent `[MockSDK]` or navigation log appears, the button is dead. **DEDUCT 3**.
+4. **Scoring**:
+   - **10**: Interaction triggers `[MockSDK]` logs perfectly.
+   - **8**: Works, but some benign console warnings.
+   - **4-6**: Button clicks recorded, but NO SDK event triggered.
+   - **0-3**: JavaScript crashes prevents any interaction.
+
+Output JSON: {
+    "step_by_step_reasoning": "string",
+    "score_interactive": int,
+    "rationale_interactive": "string"
 }
 """
 
 PROMPT_AGGREGATOR = """
 You are the Lead Judge.
-Aggregate the reports from the 5 specialists (Fidelity, Accessibility, Visual, Mobile SDK, Syntax).
+Aggregate the 6 specialist reports into a final verdict.
 
 INPUT:
-- User HTML Code
-- SPECIALIST REPORTS (JSON): Contains both "Analysis Logs" (Tools) and "Agent Scores".
+- Specialist Reports (JSON)
 
-Your Goals:
-1. **Synthesize**: Combine the 5 rationales into a structured verdict.
-2. **PRIORITIZE TOOL EVIDENCE**: 
-   - If 'static_analysis' logs a Critical Error, BUT 'agent_accessibility' ignored it, you MUST side with the TOOL and lower the score.
-   - If 'mobile_analysis' says "Failed Tap", but 'agent_mobile_sdk' gave 100, you MUST lower the score.
-   - **Ground Truth Hierarchy**: Tool Logs > Agent Opinion.
-3. **Conflict Resolution**: If Visual says "Great" but Fidelity says "Missing Feature", side with Fidelity.
+GOAL:
+Produce a final JSON with scores (0-10) and a markdown rationale.
 
-Output JSON MUST match this EXACT structure:
+Output JSON MUST match:
 {
     "score_fidelity": int,
     "score_syntax": int,
     "score_accessibility": int,
     "score_responsiveness": int,
     "score_visual": int,
-    "rationale": "string -> MUST BE MARKDOWN FORMATTED. Use bullet points for each agent's finding, followed by a '### Verdict' section.",
+    "score_interactive": int,
+    "rationale": "markdown string",
     "final_judgement": "string",
     "fixed_html": "string or null"
 }
 
 Format for 'rationale':
 ### Agent Reports
-* **Fidelity**: [Why score?] ...
-* **Visual**: [Why score?] ...
-* **Mobile**: [Why score?] ...
-* **Accessibility**: [Why score?] ...
-* **Syntax**: [Why score?] ...
+* **Fidelity**: ...
+* **Visual**: ...
+* **Mobile**: ...
+* **Accessibility**: ...
+* **Syntax**: ...
+* **Interactive**: ...
 
 ### Verdict
-[Final concise summary of the decision, mentioning the biggest blocker if any]
+[Summary]
 """
 
 async def analyze_chat(messages: List[dict]) -> EvaluationResult:
@@ -239,12 +272,30 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
     
     # 1. EXTRACT HTML FROM CONVERSATION
     last_html = ""
-    for msg in reversed(messages):
+    user_prompt_summary = "User Request Not Found"
+    
+    # Iterate backwards to find HTML and the preceding user prompt
+    for i, msg in enumerate(reversed(messages)):
         content = msg.get("content", "")
         if "<div" in content or "<html" in content or "<!DOCTYPE" in content:
             last_html = content
+            # Try to find the user prompt immediately preceding this
+            # Since we are reversing, the "next" item is the one before it in history
+            if i + 1 < len(messages):
+                 # We need to look at the original list order to be safe, but here we can just grab the next item in reversed list 
+                 # which corresponds to the message BEFORE the HTML response.
+                 prev_msg = messages[-(i+2)] 
+                 if prev_msg.get("role") == "user":
+                     user_prompt_summary = prev_msg.get("content", "")[:500] # Truncate for tokens
             break
-    
+            
+    # Fallback: if no HTML found in history (direct injection?), look at last user message
+    if user_prompt_summary == "User Request Not Found":
+         for msg in reversed(messages):
+             if msg.get("role") == "user":
+                 user_prompt_summary = msg.get("content", "")[:500]
+                 break
+
     # MOCK/VALIDATION Check
     if not api_key:
         logger.warning("Mock Mode: Proceeding with Local Analysis before returning mock (Missing GEMINI_API_KEY).")
@@ -267,7 +318,7 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
             analyzer = AdvancedAnalyzer(last_html)
             results = await analyzer.analyze()
             context_access = results["access"]
-            context_mobile = results["mobile"]
+            context_mobile = results["mobile"] # Contains Interaction Logs
             context_fidelity = results["fidelity"]
             context_visual = results["visual"]
             execution_trace = results.get("trace", [])
@@ -279,7 +330,7 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
             context_visual = "Visual Check skipped due to error."
             execution_trace = [f"error: Advanced Analysis Canceled. Exception: {str(e)}"]
 
-    # 3. RUN MULTI-AGENT EVALUATION (5 Agents)
+    # 3. RUN MULTI-AGENT EVALUATION (6 Agents)
     if not api_key:
         mock = _get_mock_result()
         mock.execution_trace = execution_trace
@@ -288,16 +339,20 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
         return mock
         
     try:
+        # Pass User Prompt to Fidelity
+        fidelity_context = f"USER PROMPT SUMMARY: {user_prompt_summary}\n\n{context_fidelity}"
+        
         # We don't pass a client instance, we just use the configured genai lib
         results = await asyncio.gather(
             _run_agent(PROMPT_ACCESSIBILITY, messages, context_access),
             _run_agent(PROMPT_VISUAL_DESIGN, messages, context_visual),
             _run_agent(PROMPT_MOBILE_SDK, messages, context_mobile),
             _run_agent(PROMPT_SYNTAX, messages, context_access),
-            _run_agent(PROMPT_FIDELITY, messages, context_fidelity)
+            _run_agent(PROMPT_FIDELITY, messages, fidelity_context),
+            _run_agent(PROMPT_SDK_INTERACTION, messages, context_mobile) # New Agent
         )
         
-        acc_result, vis_result, mob_result, syn_result, fid_result = results
+        acc_result, vis_result, mob_result, syn_result, fid_result, sdk_result = results
         
         # Normalize keys to prevent "Field required" errors if agents return generic "score"
         _normalize_keys(acc_result, "score_accessibility")
@@ -305,6 +360,7 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
         _normalize_keys(mob_result, "score_responsiveness")
         _normalize_keys(syn_result, "score_syntax")
         _normalize_keys(fid_result, "score_fidelity")
+        _normalize_keys(sdk_result, "score_interactive")
 
         # 4. LEAD JUDGE AGGREGATION
         # Collect all individual reports
@@ -317,7 +373,8 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
             "agent_visual": vis_result,
             "agent_mobile_sdk": mob_result,
             "agent_syntax": syn_result,
-            "agent_fidelity": fid_result
+            "agent_fidelity": fid_result,
+            "agent_interactive": sdk_result
         }
         
         # Call the Aggregator to synthesize the final verdict
@@ -328,7 +385,7 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
         )
         
         # Validate Aggregator Output has all required fields
-        required_fields = ["score_fidelity", "score_syntax", "score_accessibility", "score_responsiveness", "score_visual", "rationale", "final_judgement"]
+        required_fields = ["score_fidelity", "score_syntax", "score_accessibility", "score_responsiveness", "score_visual", "score_interactive", "rationale", "final_judgement"]
         missing_fields = [f for f in required_fields if f not in final_verdict]
 
         if missing_fields:
@@ -339,9 +396,10 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
             final_scores.update(mob_result)
             final_scores.update(syn_result)
             final_scores.update(fid_result)
+            final_scores.update(sdk_result)
             
             # Ensure zeroes for any totally missing keys in individual results
-            for k in ["score_fidelity", "score_syntax", "score_accessibility", "score_responsiveness", "score_visual"]:
+            for k in ["score_fidelity", "score_syntax", "score_accessibility", "score_responsiveness", "score_visual", "score_interactive"]:
                 if k not in final_scores:
                     final_scores[k] = 0
 
@@ -351,9 +409,11 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
                 f"**Mobile SDK**: {final_scores.get('rationale_responsiveness', 'N/A')}\n"
                 f"**Accessibility**: {final_scores.get('rationale_accessibility', 'N/A')}\n"
                 f"**Syntax**: {final_scores.get('rationale_syntax', 'N/A')}\n"
+                f"**Interactive**: {final_scores.get('rationale_interactive', 'N/A')}\n"
                 f"[Note: Lead Judge unavailable, using raw reports.]"
             )
             final_verdict = final_scores
+            final_verdict["rationale"] = combined_rationale
             final_verdict["rationale"] = combined_rationale
             final_verdict["final_judgement"] = "Evaluated by 5 Specialist AI Agents (Lead Judge Unavailable)."
             final_verdict["fixed_html"] = final_scores.get("fixed_html")

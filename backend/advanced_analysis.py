@@ -247,20 +247,32 @@ class AdvancedAnalyzer:
                     # Merged into Section 3
                     dna = {"font_family": "Unknown", "modern_css": []}
                     try:
-                        dna["font_family"] = await page.evaluate("window.getComputedStyle(document.body).fontFamily")
-                        features = await page.evaluate("""() => {
-                            const el = document.querySelector('button') || document.querySelector('.card') || document.querySelector('div');
-                            const style = window.getComputedStyle(el || document.body);
+                        # Improved Style DNA Extraction (User Request)
+                        dna = await page.evaluate("""() => {
+                            const btn = document.querySelector('button') || document.querySelector('input[type="submit"]') || document.querySelector('a[class*="btn"]');
+                            const body = document.body;
+                            const bodyStyle = window.getComputedStyle(body);
+                            const btnStyle = btn ? window.getComputedStyle(btn) : null;
+                            
+                            // Helper to detect modern CSS features
                             const features = [];
-                            if (style.boxShadow !== 'none') features.push('Shadows');
-                            if (parseInt(style.borderRadius) > 0) features.push('Rounded Corners');
-                            if (style.backgroundImage.includes('gradient')) features.push('Gradients');
-                            if (style.backdropFilter !== 'none') features.push('Glassmorphism');
-                            return features;
+                            if (btnStyle) {
+                                if (btnStyle.boxShadow !== 'none') features.push('Shadows');
+                                if (parseInt(btnStyle.borderRadius) > 0) features.push('Rounded Corners');
+                                if (btnStyle.backgroundImage.includes('gradient')) features.push('Gradients');
+                            }
+                            if (bodyStyle.backdropFilter !== 'none') features.push('Glassmorphism');
+
+                            return {
+                                font_family: bodyStyle.fontFamily,
+                                btn_padding: btnStyle ? btnStyle.padding : 'none',
+                                btn_radius: btnStyle ? btnStyle.borderRadius : 'none',
+                                modern_css: features
+                            }
                         }""")
-                        dna["modern_css"] = features
                     except Exception as e:
                         logger.error(f"Phase C (Visual) Failed: {e}")
+                        dna = {"font_family": "Unknown", "modern_css": [], "btn_padding": "unknown", "btn_radius": "unknown"}
                     
                     # Log Visual Verdict
                     if "times" in dna['font_family'].lower() or "serif" in dna['font_family'].lower() and "sans" not in dna['font_family'].lower():
@@ -279,11 +291,11 @@ class AdvancedAnalyzer:
                         await page.set_viewport_size({'width': 390, 'height': 844})
                         await page.wait_for_timeout(200)
                         
-                        # Verify Portrait Responsiveness (Horizontal Scroll Check)
-                        scroll_width_p = await page.evaluate("document.body.scrollWidth")
-                        if scroll_width_p > 390:
-                             self.logs["mobile_logs"].append(f"PORTRAIT FAIL: Horizontal scroll detected.")
-                             self._log_trace("x", "[FAIL] Portrait Mode: Horizontal scroll detected (Width > 390px).")
+                        # Verify Portrait Responsiveness (Horizontal Scroll Check) - User Request
+                        is_overflowing = await page.evaluate("document.body.scrollWidth > window.innerWidth")
+                        if is_overflowing:
+                             self.logs["mobile_logs"].append("[MOBILE_FAIL] Horizontal Scroll Detected")
+                             self._log_trace("x", "[FAIL] Portrait Mode: Horizontal scroll detected (scrollWidth > innerWidth).")
                         else:
                              self._log_trace("white_check_mark", "[PASS] Portrait Mode: No horizontal scroll.")
                         
