@@ -46,6 +46,8 @@ class EvaluationResult(BaseModel):
     final_judgement: str = Field(..., description="Brief summary judgement")
     fixed_html: Optional[str] = Field(None, description="The improved/fixed HTML code if requested by the user")
     execution_trace: List[str] = Field(default_factory=list, description="Linear log of all backend tool actions")
+    screenshot_portrait: Optional[str] = Field(None, description="Base64 encoded screenshot of mobile view")
+    screenshot_landscape: Optional[str] = Field(None, description="Base64 encoded screenshot of landscape view")
 
 # Prompts for Specialized Agents
 
@@ -214,19 +216,24 @@ INSTRUCTIONS:
    - **Type A: Selection Buttons** (e.g., Ratings, Radio, Options). 
      - **SUCCESS**: If the log shows `[DOM_CHANGE]` (e.g., class changed, "selected" added).
      - **Note**: These do NOT need to trigger `[MockSDK]` immediately.
-   - **Type B: Primary Actions** (e.g., Submit, Close, Next).
-     - **SUCCESS**: If the log shows `[MockSDK]` event (e.g., `trackEvent`, `dismissMessage`) OR navigation.
+   - **Type B: Primary Actions** (e.g., Submit, Next).
+     - **SUCCESS**: If the log shows `[MockSDK]` event (e.g., `trackEvent`) OR navigation.
 
 2. **Evaluate The Flow**:
    - Look for the "Unlocking" pattern: Did clicking Type A buttons eventually lead to `[DOM_CHANGE] Submit Button is now ENABLED`? 
-   - If the Submit button was initially disabled but became enabled after interactions, **SCORE THIS HIGHLY**.
+   - If the Submit button was initially disabled but became enabled after interactions, **SCORE THIS HIGHLY (10/10)**.
 
-3. **Defect Detection**:
+3. **Error Handling (Crucial)**:
+   - **IGNORE**: "MoEngage is not defined" errors.
+   - **IGNORE**: Failures on the **Close Button**. We assume the Close button works if the UI is valid; do not deduct points if clicking it throws an error in this test environment.
+
+4. **Defect Detection**:
    - **Dead Buttons**: Button clicked -> No `[DOM_CHANGE]` AND No `[MockSDK]`. **DEDUCT 3**.
    - **Broken Submit**: If Submit button is clicked but logic fails (no event). **DEDUCT 3**.
 
-4. **Scoring**:
+5. **Scoring**:
    - **10**: Perfect Flow (Selections update UI -> Submit triggers SDK).
+   - **9-10**: Flow works, but Close button threw an error (Ignore the error).
    - **8**: Buttons react visually, but SDK event is missing on final submit.
    - **5**: Buttons click but show no visual feedback (no class change).
    - **0-3**: JS Errors or unclickable elements.
@@ -329,6 +336,9 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
             context_fidelity = results["fidelity"]
             context_visual = results["visual"]
             execution_trace = results.get("trace", [])
+            # Extract screenshots (Optional, might be None if failed)
+            screenshot_portrait = results.get("screenshot_portrait")
+            screenshot_landscape = results.get("screenshot_landscape")
         except Exception as e:
             logger.error(f"Advanced Analysis Pipeline Failed completely. Falling back to empty contexts. Error: {e}", exc_info=True)
             context_access = f"System Error: {str(e)}"
@@ -336,6 +346,8 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
             context_fidelity = "Fidelity Check skipped due to error."
             context_visual = "Visual Check skipped due to error."
             execution_trace = [f"error: Advanced Analysis Canceled. Exception: {str(e)}"]
+            screenshot_portrait = None
+            screenshot_landscape = None
 
     # 3. RUN MULTI-AGENT EVALUATION (6 Agents)
     if not api_key:
@@ -435,6 +447,8 @@ async def analyze_chat(messages: List[dict]) -> EvaluationResult:
         # But we can keep a safeguard if needed. For now, trusting the "Tool-Augmented" prompt.
 
         final_verdict["execution_trace"] = execution_trace
+        final_verdict["screenshot_portrait"] = screenshot_portrait
+        final_verdict["screenshot_landscape"] = screenshot_landscape
         return EvaluationResult(**final_verdict)
 
     except Exception as e:

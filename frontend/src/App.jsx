@@ -17,12 +17,12 @@ const App = () => {
   // --- RENDER HELPERS ---
 
   const getScoreColor = (score) => {
-    // User requested 70 as the threshold.
-    // High: >= 80 (Green)
-    // Mid: 70-79 (Yellow/Orange)
-    // Low: < 70 (Red)
-    if (score >= 80) return 'text-high';
-    if (score >= 70) return 'text-mid';
+    // 0-10 Scale
+    // High: 8-10 (Green)
+    // Mid: 5-7 (Yellow)
+    // Low: 0-4 (Red)
+    if (score >= 8) return 'text-high';
+    if (score >= 5) return 'text-mid';
     return 'text-low';
   };
 

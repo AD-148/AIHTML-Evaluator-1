@@ -73,7 +73,12 @@ async def batch_evaluate(file: UploadFile = File(...)):
     try:
         # 1. Imports
         import pandas as pd
+        import shutil
+        import base64
         from io import BytesIO
+        import openpyxl
+        from openpyxl.drawing.image import Image as ExcelImage
+        from openpyxl.utils import get_column_letter
         try:
              from backend.moengage_api import generate_html_from_stream, create_new_session, BYPASS_INSTRUCTION
         except ImportError:
@@ -114,6 +119,8 @@ async def batch_evaluate(file: UploadFile = File(...)):
                 if not session_id:
                     result["Test_Log"] = "Failed to create session."
                     return result
+                
+                result["Session_ID"] = session_id
             except Exception as e:
                 result["Test_Log"] = f"Session Creation Exception: {e}"
                 return result
@@ -146,6 +153,10 @@ async def batch_evaluate(file: UploadFile = File(...)):
                 result["Score_Responsiveness"] = eval_result.score_responsiveness
                 result["Score_Syntax"] = getattr(eval_result, 'score_syntax', 0)
                 result["Score_Interactive"] = getattr(eval_result, 'score_interactive', 0)
+                
+                # Pass Base64 strings to result dict (to be handled by Excel Writer)
+                result["Screenshot_Portrait"] = getattr(eval_result, 'screenshot_portrait', "")
+                result["Screenshot_Landscape"] = getattr(eval_result, 'screenshot_landscape', "")
                 
                 result["Verdict"] = eval_result.final_judgement
                 result["Rationale"] = eval_result.rationale
@@ -184,17 +195,76 @@ async def batch_evaluate(file: UploadFile = File(...)):
         for k, v in new_cols.items():
             df[k] = v
         
-        # 6. Return File
+        # 6. Process Images and Return File
         output_stream = BytesIO()
-        df.to_excel(output_stream, index=False)
+        df.to_excel(output_stream, index=False, engine='openpyxl')
         output_stream.seek(0)
+        
+        # Load workbook to insert images
+        wb = openpyxl.load_workbook(output_stream)
+        ws = wb.active
+        
+        # Find Screenshot Columns
+        portrait_col_idx = None
+        landscape_col_idx = None
+        
+        for idx, col in enumerate(df.columns, 1): # 1-based index
+            if col == "Screenshot_Portrait":
+                portrait_col_idx = idx
+            elif col == "Screenshot_Landscape":
+                landscape_col_idx = idx
+        
+        # Insert Images
+        if portrait_col_idx or landscape_col_idx:
+            # Set generic row height for all data rows
+            for row in range(2, len(df) + 2):
+                ws.row_dimensions[row].height = 100
+                
+            if portrait_col_idx:
+                 col_letter = get_column_letter(portrait_col_idx)
+                 ws.column_dimensions[col_letter].width = 30
+                 
+            if landscape_col_idx:
+                 col_letter = get_column_letter(landscape_col_idx)
+                 ws.column_dimensions[col_letter].width = 50
+
+            for row_idx, row_data in df.iterrows():
+                excel_row = row_idx + 2 # Header is 1, df is 0-indexed
+                
+                # Helper to add image
+                def add_image_to_cell(b64_str, col_idx):
+                    if not b64_str or not isinstance(b64_str, str): return
+                    try:
+                        img_data = base64.b64decode(b64_str)
+                        img = ExcelImage(BytesIO(img_data))
+                        # Resize to fit reasonably (e.g., height 120px)
+                        # Maintain aspect ratio usually
+                        img.height = 120
+                        img.width = 120 * (img.width / img.height) 
+                        
+                        cell = ws.cell(row=excel_row, column=col_idx)
+                        ws.add_image(img, cell.coordinate)
+                        cell.value = "" # Clear base64 string
+                    except Exception as e:
+                        print(f"Image Error Row {excel_row}: {e}")
+
+                if portrait_col_idx:
+                    add_image_to_cell(row_data.get("Screenshot_Portrait"), portrait_col_idx)
+                
+                if landscape_col_idx:
+                    add_image_to_cell(row_data.get("Screenshot_Landscape"), landscape_col_idx)
+
+        # Save final workbook with images
+        final_stream = BytesIO()
+        wb.save(final_stream)
+        final_stream.seek(0)
         
         from fastapi.responses import StreamingResponse
         headers = {
-            'Content-Disposition': 'attachment; filename="evaluated_results.xlsx"'
+            'Content-Disposition': 'attachment; filename="evaluated_results_with_screens.xlsx"'
         }
-        return StreamingResponse(output_stream, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers=headers)
-
+        return StreamingResponse(final_stream, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers=headers)
+        
     except Exception as e:
         logger.error(f"Batch Processing Error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

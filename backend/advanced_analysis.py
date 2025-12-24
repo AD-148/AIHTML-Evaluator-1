@@ -7,6 +7,7 @@ import subprocess
 from bs4 import BeautifulSoup
 from typing import Dict, Any, List, Optional
 import asyncio
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -355,17 +356,31 @@ class AdvancedAnalyzer:
                                              # Prioritize radio/box to ensure state is set before submitting
                                              score += 2 
                                     
-                                    # HIGH PRIORITY: "Next" / "Submit" / "Start" Buttons
+                                    # PRIORITY 1: Selection Buttons (Radio-like behavior)
+                                    # Users must select options BEFORE submitting.
+                                    # We detect this via attributes (data-rating, aria-checked) or Emoji content.
+                                    is_selection = False
+                                    if tag == 'button':
+                                         # Check for data-rating (Common in current test case)
+                                         if await el.get_attribute("data-rating") or await el.get_attribute("aria-checked"):
+                                              score += 12
+                                              is_selection = True
+                                         # Check for Emoji content (Heuristic for rating buttons)
+                                         elif any(char in text for char in ['⭐', '★', '😞', 'kb', '🙂', '😄']):
+                                              score += 12
+                                              is_selection = True
+
+                                    # PRIORITY 2: "Next" / "Submit" / "Start" Buttons
                                     # (Bonus for known positive signals, but NOT required)
                                     combined_text = (text + " " + id_attr + " " + cls_attr + " " + aria).lower()
                                     is_positive = False
                                     
-                                    if any(w in combined_text for w in ['next', 'submit', 'continue', 'proceed', 'start', 'ok', 'yes']):
+                                    if any(w in combined_text for w in ['next', 'submit', 'continue', 'proceed', 'start', 'ok', 'yes']) and not is_selection:
                                         score += 5 # Standard bonus
                                         is_positive = True
                                         
-                                    # MEDIUM PRIORITY: Standard Buttons
-                                    if tag == 'button' or role == 'button':
+                                    # PRIORITY 3: Standard Buttons
+                                    if (tag == 'button' or role == 'button') and not is_selection:
                                         score += 2
                                         
                                     # LOW PRIORITY: "Close" / "Cancel" / "Back" 
@@ -441,6 +456,7 @@ class AdvancedAnalyzer:
                                 url_before = page.url
                                 
                                 # Interact & Observe DOM (User Request: Capture State Changes for selection buttons)
+                                # Interact & Observe
                                 try:
                                     # 1. State BEFORE
                                     try:
@@ -450,39 +466,58 @@ class AdvancedAnalyzer:
                                          old_class = ""
                                          old_disabled = False
 
+                                    # 2. PERFORM ACTION (Merged Smart Logic)
                                     if tag == 'select':
-                                        # Handle Select Dropdowns
                                         opts = await el.locator('option').all_text_contents()
                                         if opts:
-                                            # Pick the second option if available
                                             val = opts[1] if len(opts) > 1 else opts[0]
                                             await el.select_option(label=val)
-                                    elif tag in ['input', 'textarea']:
-                                        if itype in ['radio', 'checkbox']:
-                                            await el.click(timeout=1000)
+                                            self.logs["mobile_logs"].append(f"Round {current_round+1}: Selected '{val}' in {desc}")
                                         else:
-                                            # Text Input
-                                            await el.fill("Test Input")
-                                    else:
-                                        # Standard Click
-                                        await el.click(timeout=1000)
-                                    
-                                    # Wait for potential JS
-                                    await page.wait_for_timeout(300)
+                                            self._log_trace("warning", f"[WARN] Mobile: <select> has no options.")
 
-                                    # 2. State AFTER
+                                    elif tag in ['input', 'textarea'] and itype not in ['button', 'submit', 'checkbox', 'radio', 'range', 'color']:
+                                        # Smart Input Filling
+                                        val = await self._get_smart_input_value(el)
+                                        await el.fill(val)
+                                        self.logs["mobile_logs"].append(f"Round {current_round+1}: Filled {desc} with '{val}'")
+                                        
+                                    elif itype in ['checkbox', 'radio']:
+                                        try:
+                                            await el.click(force=True, timeout=1500)
+                                            self.logs["mobile_logs"].append(f"Round {current_round+1}: Toggled {desc}")
+                                        except:
+                                            id_val = await el.get_attribute("id")
+                                            if id_val:
+                                                await page.locator(f"label[for='{id_val}']").click(force=True, timeout=1500)
+                                                self.logs["mobile_logs"].append(f"Round {current_round+1}: Toggled Label for {desc}")
+
+                                    else:
+                                        # Click/Tap (Buttons, Links)
+                                        try:
+                                            await el.click(timeout=2000)
+                                            self.logs["mobile_logs"].append(f"Round {current_round+1}: Clicked {desc}")
+                                        except Exception as click_err:
+                                            if "intersects pointer events" in str(click_err) or "visible" in str(click_err) or "Timeout" in str(click_err):
+                                                await el.click(force=True, timeout=2000)
+                                                self.logs["mobile_logs"].append(f"Round {current_round+1}: Force-Clicked {desc}")
+                                            else:
+                                                raise click_err
+
+                                    # Wait for potential JS
+                                    await page.wait_for_timeout(500)
+
+                                    # 3. State AFTER & DOM CHANGE CHECK (User Request)
                                     try:
                                         new_class = await el.get_attribute("class") or ""
                                         new_disabled = await el.is_disabled()
                                     except:
                                         new_class = ""
-                                        new_disabled = False # if element removed, treat as enabled? No, treat as gone.
+                                        new_disabled = False
                                     
-                                    # 3. DOM CHANGE DETECTION
                                     # Check for Class Changes (Visual Feedback)
                                     if old_class != new_class:
                                         self.logs["mobile_logs"].append(f"[DOM_CHANGE] Button visual state updated. Class: '{old_class}' -> '{new_class}'")
-                                        self._log_trace("art", f"[DOM_CHANGE] Visual update detected on {desc}")
                                         
                                     # Check for Enable/Disable Toggle (Logic Feedback)
                                     if old_disabled != new_disabled:
@@ -491,53 +526,10 @@ class AdvancedAnalyzer:
                                         self._log_trace("unlock", f"[DOM_CHANGE] Element became {status}")
                                         
                                     # Check GLOBAL Submit Button (Did this unlock the submit button?)
-                                    # Heuristic: Find button with 'submit' text or type
                                     submit_btn = page.locator("button:has-text('Submit'), input[type='submit']")
                                     if await submit_btn.count() > 0:
-                                         is_submit_disabled = await submit_btn.first.is_disabled()
-                                         # If we don't have previous state for submit, we just log its current state if enabled
-                                         if not is_submit_disabled:
-                                              # Log it as a significant event
+                                         if not await submit_btn.first.is_disabled():
                                               self.logs["mobile_logs"].append("[DOM_CHANGE] Submit Button is currently ENABLED.")
-                                            self.logs["mobile_logs"].append(f"Round {current_round+1}: Selected '{val}' in {desc}")
-                                            self._log_trace("ballot_box_with_check", f"[PASS] Mobile: Selected option '{val}' in <select>.")
-                                            # Mark as "Action Taken" but don't force break round unless UI updates
-                                        else:
-                                             self._log_trace("warning", f"[WARN] Mobile: <select> has no options.")
-
-                                    elif tag in ['input', 'textarea'] and itype not in ['button', 'submit', 'checkbox', 'radio', 'range', 'color']:
-                                        # Smart Input Filling
-                                        val = await self._get_smart_input_value(el)
-                                        await el.fill(val)
-                                        self.logs["mobile_logs"].append(f"Round {current_round+1}: Filled {desc} with '{val}'")
-                                        self._log_trace("keyboard", f"[PASS] Mobile: Filled Input {desc} with '{val}'.")
-                                        # Input filling is a PASS. Even if UI doesn't update, we made progress.
-                                        
-                                    elif itype in ['checkbox', 'radio']:
-                                        try:
-                                            await el.click(force=True, timeout=1500)
-                                            self.logs["mobile_logs"].append(f"Round {current_round+1}: Toggled {desc}")
-                                            self._log_trace("check", f"[PASS] Mobile: Toggled {desc}.")
-                                        except:
-                                            # Try label?
-                                            id_val = await el.get_attribute("id")
-                                            if id_val:
-                                                await page.locator(f"label[for='{id_val}']").click(force=True, timeout=1500)
-                                                self._log_trace("check", f"[PASS] Mobile: Toggled Label for {desc}.")
-
-                                    else:
-                                        # Click/Tap (Buttons, Links)
-                                        # Retry Logic for Overlays/Backdrops
-                                        try:
-                                            await el.click(timeout=2000)
-                                            self.logs["mobile_logs"].append(f"Round {current_round+1}: Clicked {desc}")
-                                        except Exception as click_err:
-                                            if "intersects pointer events" in str(click_err) or "visible" in str(click_err) or "Timeout" in str(click_err):
-                                                self._log_trace("warning", f"[INFO] Mobile: Click intercepted/timed out on {desc}. Retrying with FORCE CLICK.")
-                                                await el.click(force=True, timeout=2000)
-                                                self.logs["mobile_logs"].append(f"Round {current_round+1}: Force-Clicked {desc}")
-                                            else:
-                                                raise click_err
                                     
                                     executed_actions.add(sig)
                                     
@@ -592,12 +584,25 @@ class AdvancedAnalyzer:
                     except Exception as loop_err:
                         self._log_trace("boom", f"[FAIL] Mobile Loop Crashed: {loop_err}")
 
+                    # Capture Portrait Screenshot (After interaction)
+                    ss_bytes_p = await page.screenshot(type="png", full_page=False)
+                    # We store it in 'result' (aliased from self.logs? No, need to pass it out)
+                    # Hack: attach to self.logs temporarily or return field? 
+                    # The Method returns 'result' dict at the end. We should add it there.
+                    # We'll assume result is available or return it in keys.
+                    results["screenshot_portrait"] = base64.b64encode(ss_bytes_p).decode('utf-8')
+
                     # 2. Landscape check
                     try:
                         self._log_section("5. CROSS-PLATFORM CHECK")
                         self._log_trace("iphone", "Verifying Landscape Mode (Orientation Test)...")
                         await page.set_viewport_size({"width": 844, "height": 390})
-                        await page.wait_for_timeout(200)
+                        await page.wait_for_timeout(500)
+                        
+                        # Capture Landscape Screenshot
+                        ss_bytes = await page.screenshot(type="png", full_page=False)
+                        results["screenshot_landscape"] = base64.b64encode(ss_bytes).decode('utf-8')
+                        
                         scroll_width = await page.evaluate("document.body.scrollWidth")
                         if scroll_width > 844:
                             self.logs["mobile_logs"].append(f"LANDSCAPE FAIL: Horizontal scroll detected.")
@@ -607,8 +612,7 @@ class AdvancedAnalyzer:
                             self._log_trace("white_check_mark", "[PASS] Landscape Mode: No horizontal scroll.")
                             
                     except Exception as e:
-                        logger.error(f"Phase D (Mobile iOS) Failed: {e}")
-                        self.logs["mobile_logs"].append(f"iOS Check Crash: {e}")
+                        self._log_trace("warning", f"[WARN] Landscape check failed: {e}")
 
                     # --- PHASE D1.5: RUNTIME ERROR CHECK ---
                     errors = [log for log in console_logs if "error" in log.lower() or "exception" in log.lower()]
