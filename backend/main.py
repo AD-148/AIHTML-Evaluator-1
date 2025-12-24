@@ -110,7 +110,10 @@ async def batch_evaluate(file: UploadFile = File(...)):
                 "Score_Interactive": 0,
                 "Verdict": "ERROR",
                 "Rationale": "Processing Error",
-                "Test_Log": ""
+                "Test_Log": "",
+                "Session_ID": "N/A",
+                "Screenshot_Portrait": "",
+                "Screenshot_Landscape": ""
             }
             
             # A. Create Session (Blocking -> Thread)
