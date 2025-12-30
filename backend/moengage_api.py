@@ -21,11 +21,11 @@ HEADERS = {
     "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
     "content-type": "application/json",
     # "authorization": "Bearer ...", # Loaded from env or fallback
-    "moetraceid": "30042499-beb7-4cc8-b390-85677e724c33",
+    "moetraceid": "51c5e78a-585a-44a9-809b-4b24ec12ccb7",
     "origin": "https://html-ai-template.moestaging.com",
     "page": "inapp/create/",
     "priority": "u=1, i",
-    "refreshtoken": "ff1ece70-fc98-4a27-ba46-e186110e8992",
+    "refreshtoken": "d4c17d7b-e3eb-44c7-929a-2aeca2524260",
     "sec-ch-ua": '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
     "sec-ch-ua-mobile": "?0",
     "sec-ch-ua-platform": '"macOS"',
@@ -45,7 +45,7 @@ def get_common_headers(auth_token):
     return req_headers
 
 def get_cookies_dict():
-    cookies_header = os.environ.get("MOENGAGE_COOKIES", "moe_c_s=1; moe_uuid=c29c9a68-a500-4e9a-972f-4de836edf096; moe_u_d=HcdBCoAgEAXQu8y6gZzEssuIMX8gEILMVXT3xOV7qaarKO2WS8VEmrIqup-7Dbazg2SGAC6yEwH7RT1nOwLLFiNWCwYP-n4; moe_s_n=RcpBCsMgFIThu7x1hHmiTsxVSnnUYKGUtguzK7l7NJss55_vL83esoiPJWbW5BAZXEBUVxAervi1shJPBWTquNkmizIlKjV7zhz1c9YZmGS1l21j3u7jqZfPGqDs5Gs_a73uBw")
+    cookies_header = os.environ.get("MOENGAGE_COOKIES", "moe_c_s=1; moe_uuid=829fb09f-9b2e-4395-ac8b-9eef50753265; moe_u_d=HcdRCoAgDADQu-y7QWMa2mVEtwmBEGR-RXdP-nwP9HQ2hb3m1m0BTVnVpu9r_BzHBFDJKkyMXMSjC1vFQMZopD56F5VXgfcD; moe_s_n=PYpLCoQwDEDvkrWFZNqa2KsMQ6hOBBF1UXfi3bUuXL7PAUVnSCDR2mDYuS6jucB_cjIaOu4xf_w45NwHaO656A6JuGVkYY4SsdrlsYI3DDrpXvH7q8XeXwiZPMUGVt20QPLnBQ")
     cookie_dict = {}
     if cookies_header:
         try:
@@ -62,7 +62,7 @@ def create_new_session() -> str:
     Creates a new session via the /sessions endpoint.
     Returns the session_id string.
     """
-    auth_token = os.environ.get("MOENGAGE_BEARER_TOKEN", "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE1NzI1MTI0NTciLCJ0eXAiOiJKV1QifQ.eyJhcHAiOnsiYXBwX2tleSI6IkNNNEQxTFpOMklNSk5CWTlVTFhBVTczRCIsImRiX25hbWUiOiJ6YWluX2luYXBwIiwiZGlzcGxheV9uYW1lIjoiemFpbl9pbmFwcCIsImVudmlyb25tZW50IjoibGl2ZSIsImlkIjoiNjM5ODUyZWViMGVjOWFiMzhhNzkyMTg5In0sImV4cCI6MTc3MTk3MzMyNCwiaWF0IjoxNzY2NzE3MzI0LCJpc3MiOiJhcHAubW9lbmdhZ2UuY29tIiwibmJmIjoxNzY2NzE3MzI0LCJyb2xlIjoiQWRtaW4iLCJ1c2VyIjp7ImVtYWlsIjoia2F1c2hpa2kudmFqcGF5ZWVAbW9lbmdhZ2UuY29tIiwiaWQiOiI2NDQyNDE0NjBlOTM0Mjg1ZDMzNDJiYzEiLCJsb2dpbl90eXBlIjoiU1REIn19.diHO_Db9oS4yAzXuwu1_3tdrZvBHfx5w0e3-rWmTkt2CJqi3CVTlDtxFzxm8FaGAjs2XHfE7nRQtOhLT7ryi7kULzFdGCQf0IjMaOY_Po836jvhFAOPQzruxVsn8m1XbHdmfsOzkel-Uo5uAUEofHHwMwMCCyHVW3hvuAi5gRwn7dtKDaQXFpm5PJBbEzp7StWaRRVKeEBrxksZ7zSWmFM_Rc640Qnv32rPyeESfMwoL9bb8ODNpS1q6J3rZmnPh9w0Uf8oMbE5vA7Bh8qpW-DBJgkOPkHs7cYGLbeJeHwJfjZRwOY3bkj2Va5UnPMK6ZVg6zkWLteqyrPYg27ycCQ")
+    auth_token = os.environ.get("MOENGAGE_BEARER_TOKEN", "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE1NzI1MTI0NTciLCJ0eXAiOiJKV1QifQ.eyJhcHAiOnsiYXBwX2tleSI6IkNNNEQxTFpOMklNSk5CWTlVTFhBVTczRCIsImRiX25hbWUiOiJ6YWluX2luYXBwIiwiZGlzcGxheV9uYW1lIjoiemFpbl9pbmFwcCIsImVudmlyb25tZW50IjoibGl2ZSIsImlkIjoiNjM5ODUyZWViMGVjOWFiMzhhNzkyMTg5In0sImV4cCI6MTc3MjMzNDc3NSwiaWF0IjoxNzY3MDc4Nzc1LCJpc3MiOiJhcHAubW9lbmdhZ2UuY29tIiwibmJmIjoxNzY3MDc4Nzc1LCJyb2xlIjoiQWRtaW4iLCJ1c2VyIjp7ImVtYWlsIjoia2F1c2hpa2kudmFqcGF5ZWVAbW9lbmdhZ2UuY29tIiwiaWQiOiI2NDQyNDE0NjBlOTM0Mjg1ZDMzNDJiYzEiLCJsb2dpbl90eXBlIjoiU1REIn19.eajLu_gRNTTvDd3uaQYVO5zSXRfu5SoGjMkZfni-K0yH3XP_CgWIPj0njinHaRU2bfNtDnKpM5p5EIyOoH9GqQQL4TGyCrLMneZA-5RIzRNs0itGKi57JoPtgR1Bx9umvPQrfxWtwZqRy_s1XXianfYblOGVyfc-SQAawn4IWrM7GEtkZe_INvf7FdvTaROkjIF8mO66to5z23eJC_MghxRdDY2nPVHPkIvrmBKumz8zatMEXTvcdC63ubiakEgdkX9HwtVy-niwKYB2ax39XQlWfE4YoYP2-bY6cM4JEzU4piYJcgZiiz7E09VRi_txUgklrhwqBGs_a4a1dH0WGQ")
     
     headers = get_common_headers(auth_token)
     cookie_dict = get_cookies_dict()
@@ -107,7 +107,7 @@ def generate_html_from_stream(prompt: str, session_id: str = None) -> tuple[str,
     """
     full_prompt = str(prompt) + BYPASS_INSTRUCTION
     
-    auth_token = os.environ.get("MOENGAGE_BEARER_TOKEN", "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE1NzI1MTI0NTciLCJ0eXAiOiJKV1QifQ.eyJhcHAiOnsiYXBwX2tleSI6IkNNNEQxTFpOMklNSk5CWTlVTFhBVTczRCIsImRiX25hbWUiOiJ6YWluX2luYXBwIiwiZGlzcGxheV9uYW1lIjoiemFpbl9pbmFwcCIsImVudmlyb25tZW50IjoibGl2ZSIsImlkIjoiNjM5ODUyZWViMGVjOWFiMzhhNzkyMTg5In0sImV4cCI6MTc3MTk3MzMyNCwiaWF0IjoxNzY2NzE3MzI0LCJpc3MiOiJhcHAubW9lbmdhZ2UuY29tIiwibmJmIjoxNzY2NzE3MzI0LCJyb2xlIjoiQWRtaW4iLCJ1c2VyIjp7ImVtYWlsIjoia2F1c2hpa2kudmFqcGF5ZWVAbW9lbmdhZ2UuY29tIiwiaWQiOiI2NDQyNDE0NjBlOTM0Mjg1ZDMzNDJiYzEiLCJsb2dpbl90eXBlIjoiU1REIn19.diHO_Db9oS4yAzXuwu1_3tdrZvBHfx5w0e3-rWmTkt2CJqi3CVTlDtxFzxm8FaGAjs2XHfE7nRQtOhLT7ryi7kULzFdGCQf0IjMaOY_Po836jvhFAOPQzruxVsn8m1XbHdmfsOzkel-Uo5uAUEofHHwMwMCCyHVW3hvuAi5gRwn7dtKDaQXFpm5PJBbEzp7StWaRRVKeEBrxksZ7zSWmFM_Rc640Qnv32rPyeESfMwoL9bb8ODNpS1q6J3rZmnPh9w0Uf8oMbE5vA7Bh8qpW-DBJgkOPkHs7cYGLbeJeHwJfjZRwOY3bkj2Va5UnPMK6ZVg6zkWLteqyrPYg27ycCQ")
+    auth_token = os.environ.get("MOENGAGE_BEARER_TOKEN", "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE1NzI1MTI0NTciLCJ0eXAiOiJKV1QifQ.eyJhcHAiOnsiYXBwX2tleSI6IkNNNEQxTFpOMklNSk5CWTlVTFhBVTczRCIsImRiX25hbWUiOiJ6YWluX2luYXBwIiwiZGlzcGxheV9uYW1lIjoiemFpbl9pbmFwcCIsImVudmlyb25tZW50IjoibGl2ZSIsImlkIjoiNjM5ODUyZWViMGVjOWFiMzhhNzkyMTg5In0sImV4cCI6MTc3MjMzNDc3NSwiaWF0IjoxNzY3MDc4Nzc1LCJpc3MiOiJhcHAubW9lbmdhZ2UuY29tIiwibmJmIjoxNzY3MDc4Nzc1LCJyb2xlIjoiQWRtaW4iLCJ1c2VyIjp7ImVtYWlsIjoia2F1c2hpa2kudmFqcGF5ZWVAbW9lbmdhZ2UuY29tIiwiaWQiOiI2NDQyNDE0NjBlOTM0Mjg1ZDMzNDJiYzEiLCJsb2dpbl90eXBlIjoiU1REIn19.eajLu_gRNTTvDd3uaQYVO5zSXRfu5SoGjMkZfni-K0yH3XP_CgWIPj0njinHaRU2bfNtDnKpM5p5EIyOoH9GqQQL4TGyCrLMneZA-5RIzRNs0itGKi57JoPtgR1Bx9umvPQrfxWtwZqRy_s1XXianfYblOGVyfc-SQAawn4IWrM7GEtkZe_INvf7FdvTaROkjIF8mO66to5z23eJC_MghxRdDY2nPVHPkIvrmBKumz8zatMEXTvcdC63ubiakEgdkX9HwtVy-niwKYB2ax39XQlWfE4YoYP2-bY6cM4JEzU4piYJcgZiiz7E09VRi_txUgklrhwqBGs_a4a1dH0WGQ")
     
     if not session_id:
         return "", "Error: No Session ID provided."
