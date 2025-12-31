@@ -21,9 +21,9 @@ HEADERS = {
     "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
     "content-type": "application/json",
     # "authorization": "Bearer ...", # Loaded from env or fallback
-    "moetraceid": "51c5e78a-585a-44a9-809b-4b24ec12ccb7",
+    "moetraceid": "a650353b-ab5b-4836-be0b-f83c6a891eb8",
     "origin": "https://html-ai-template.moestaging.com",
-    "page": "inapp/create/",
+    "page": "inapp/edit/69544f1faf4f9cc63abd57cc",
     "priority": "u=1, i",
     "refreshtoken": "d4c17d7b-e3eb-44c7-929a-2aeca2524260",
     "sec-ch-ua": '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
@@ -45,7 +45,7 @@ def get_common_headers(auth_token):
     return req_headers
 
 def get_cookies_dict():
-    cookies_header = os.environ.get("MOENGAGE_COOKIES", "moe_c_s=1; moe_uuid=829fb09f-9b2e-4395-ac8b-9eef50753265; moe_u_d=HcdRCoAgDADQu-y7QWMa2mVEtwmBEGR-RXdP-nwP9HQ2hb3m1m0BTVnVpu9r_BzHBFDJKkyMXMSjC1vFQMZopD56F5VXgfcD; moe_s_n=PYpLCoQwDEDvkrWFZNqa2KsMQ6hOBBF1UXfi3bUuXL7PAUVnSCDR2mDYuS6jucB_cjIaOu4xf_w45NwHaO656A6JuGVkYY4SsdrlsYI3DDrpXvH7q8XeXwiZPMUGVt20QPLnBQ")
+    cookies_header = os.environ.get("MOENGAGE_COOKIES", "moe_c_s=1; moe_uuid=829fb09f-9b2e-4395-ac8b-9eef50753265; moe_u_d=HcdRCoAgDADQu-y7QWMa2mVEtwmBEGR-RXdP-nwP9HQ2hb3m1m0BTVnVpu9r_BzHBFDJKkyMXMSjC1vFQMZopD56F5VXgfcD; moe_s_n=Rco7DoUgEIXhvUwNCTDATNzKzc1EeSTGqAV2xr0rNpbnO_8JTRYYYMSE7A1rn0PRvkSnOWPVyJhynUpCrKCeuMkBg6VI1jsmDjF2XV9lYxQkmeXo8_fvT_n6YAKRJQWb7NIeddcN")
     cookie_dict = {}
     if cookies_header:
         try:
