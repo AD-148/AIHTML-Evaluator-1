@@ -21,11 +21,11 @@ HEADERS = {
     "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
     "content-type": "application/json",
     # "authorization": "Bearer ...", # Loaded from env or fallback
-    "moetraceid": "a650353b-ab5b-4836-be0b-f83c6a891eb8",
+    "moetraceid": "1eb63886-79d0-4210-9e76-c4974a940550",
     "origin": "https://html-ai-template.moestaging.com",
-    "page": "inapp/edit/69544f1faf4f9cc63abd57cc",
+    "page": "inapp/create/",
     "priority": "u=1, i",
-    "refreshtoken": "d4c17d7b-e3eb-44c7-929a-2aeca2524260",
+    "refreshtoken": "34cfe549-f0b4-46a2-94db-b2ceed7391d2",
     "sec-ch-ua": '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
     "sec-ch-ua-mobile": "?0",
     "sec-ch-ua-platform": '"macOS"',
@@ -45,7 +45,7 @@ def get_common_headers(auth_token):
     return req_headers
 
 def get_cookies_dict():
-    cookies_header = os.environ.get("MOENGAGE_COOKIES", "moe_c_s=1; moe_uuid=829fb09f-9b2e-4395-ac8b-9eef50753265; moe_u_d=HcdRCoAgDADQu-y7QWMa2mVEtwmBEGR-RXdP-nwP9HQ2hb3m1m0BTVnVpu9r_BzHBFDJKkyMXMSjC1vFQMZopD56F5VXgfcD; moe_s_n=Rco7DoUgEIXhvUwNCTDATNzKzc1EeSTGqAV2xr0rNpbnO_8JTRYYYMSE7A1rn0PRvkSnOWPVyJhynUpCrKCeuMkBg6VI1jsmDjF2XV9lYxQkmeXo8_fvT_n6YAKRJQWb7NIeddcN")
+    cookies_header = os.environ.get("MOENGAGE_COOKIES", "moe_c_s=1; moe_uuid=303a6077-185f-472c-b8fe-89b42ff438a0; moe_u_d=HcdRCoAgDADQu-y7QWMa2mVEtwmBEGR-RXdP-nwP9HQ2hb3m1m0BTVnVpu9r_BzHBFDJKkyMXMSjC1vFQMZopD56F5VXgfcD; moe_s_n=Rco7DoMwEEXRvUyNpYnt-ZitRNEoEEdCCChMh9g7Ng3lu-8cUGyGHlCGX4rk3YABXfzz6FRDcJpFfPZfFCToKi62Q_8SFlJOnhlTq8tdFbGD0Sbb23x_2pMfr0IcqfrVNiu1nhc")
     cookie_dict = {}
     if cookies_header:
         try:
@@ -62,7 +62,7 @@ def create_new_session() -> str:
     Creates a new session via the /sessions endpoint.
     Returns the session_id string.
     """
-    auth_token = os.environ.get("MOENGAGE_BEARER_TOKEN", "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE1NzI1MTI0NTciLCJ0eXAiOiJKV1QifQ.eyJhcHAiOnsiYXBwX2tleSI6IkNNNEQxTFpOMklNSk5CWTlVTFhBVTczRCIsImRiX25hbWUiOiJ6YWluX2luYXBwIiwiZGlzcGxheV9uYW1lIjoiemFpbl9pbmFwcCIsImVudmlyb25tZW50IjoibGl2ZSIsImlkIjoiNjM5ODUyZWViMGVjOWFiMzhhNzkyMTg5In0sImV4cCI6MTc3MjMzNDc3NSwiaWF0IjoxNzY3MDc4Nzc1LCJpc3MiOiJhcHAubW9lbmdhZ2UuY29tIiwibmJmIjoxNzY3MDc4Nzc1LCJyb2xlIjoiQWRtaW4iLCJ1c2VyIjp7ImVtYWlsIjoia2F1c2hpa2kudmFqcGF5ZWVAbW9lbmdhZ2UuY29tIiwiaWQiOiI2NDQyNDE0NjBlOTM0Mjg1ZDMzNDJiYzEiLCJsb2dpbl90eXBlIjoiU1REIn19.eajLu_gRNTTvDd3uaQYVO5zSXRfu5SoGjMkZfni-K0yH3XP_CgWIPj0njinHaRU2bfNtDnKpM5p5EIyOoH9GqQQL4TGyCrLMneZA-5RIzRNs0itGKi57JoPtgR1Bx9umvPQrfxWtwZqRy_s1XXianfYblOGVyfc-SQAawn4IWrM7GEtkZe_INvf7FdvTaROkjIF8mO66to5z23eJC_MghxRdDY2nPVHPkIvrmBKumz8zatMEXTvcdC63ubiakEgdkX9HwtVy-niwKYB2ax39XQlWfE4YoYP2-bY6cM4JEzU4piYJcgZiiz7E09VRi_txUgklrhwqBGs_a4a1dH0WGQ")
+    auth_token = os.environ.get("MOENGAGE_BEARER_TOKEN", "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE1NzI1MTI0NTciLCJ0eXAiOiJKV1QifQ.eyJhcHAiOnsiYXBwX2tleSI6IkNNNEQxTFpOMklNSk5CWTlVTFhBVTczRCIsImRiX25hbWUiOiJ6YWluX2luYXBwIiwiZGlzcGxheV9uYW1lIjoiemFpbl9pbmFwcCIsImVudmlyb25tZW50IjoibGl2ZSIsImlkIjoiNjM5ODUyZWViMGVjOWFiMzhhNzkyMTg5In0sImV4cCI6MTc3Mjg0MjkzOCwiaWF0IjoxNzY3NTg2OTM4LCJpc3MiOiJhcHAubW9lbmdhZ2UuY29tIiwibmJmIjoxNzY3NTg2OTM4LCJyb2xlIjoiQWRtaW4iLCJ1c2VyIjp7ImVtYWlsIjoiYXJpaml0LmRhc0Btb2VuZ2FnZS5jb20iLCJpZCI6IjYzZGNlZjg3ODBlOTM3Yjg5YzE0Y2IzNyIsImxvZ2luX3R5cGUiOiJTVEQifX0.bK639O6rZgsDR3uiBcLAFnBI8u35gFdDVBmvkIqgVcW63NkI4s8JrxvJf4p_GMu3x9g9AtcaIxDndtWnQhMDCxYzHnPIbkOHL_ewBoWqFG5nC1ZIQyX0YlNdEi1lYgAm09FLMjKvJjmZoTDwgMYfOdDXYxYgZ2EsGTEOb-u_CTXzJ4YBjlvAl85kYampUVARgD1jtGY_3wR0X9uBY11zeb3yaVU96fGEPjoLbPNN8uNXlquBtMiedzphdsBmY3z9amQ89PpFqdfN1rVBQvrMeQwmSzPfVUyzL857yrH4RvfuSnuYiiRIyDrpaalQLAIfviSYb406p1P76Ik02KvyGw")
     
     headers = get_common_headers(auth_token)
     cookie_dict = get_cookies_dict()
