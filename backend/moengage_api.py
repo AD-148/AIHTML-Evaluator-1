@@ -11,7 +11,7 @@ BYPASS_INSTRUCTION = " Do not ask for clarification. If details are missing, mak
 # Configuration (Should be in .env, but defaults provided for immediate usage)
 # Configuration (Should be in .env, but defaults provided for immediate usage)
 API_BASE = "https://html-ai-template.moestaging.com/api/v1/bff"
-API_URL = f"{API_BASE}/response/stream?user_id=kaushiki.vajpayee@moengage.com&session_id={{}}&agent_id=inapp-html-ai-v1"
+API_URL = f"{API_BASE}/response/stream?user_id=kaushiki.vajpayee%40moengage.com&session_id={{}}&agent_id=inapp-html-ai-v1"
 SESSION_URL = f"{API_BASE}/sessions"
 
 # Headers from User CURL
