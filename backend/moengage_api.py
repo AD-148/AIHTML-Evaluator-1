@@ -23,6 +23,7 @@ HEADERS = {
     # "authorization": "Bearer ...", # Loaded from env or fallback
     "moetraceid": "b249b945-2b10-4dd4-a340-d8aeea9942de",
     "origin": "https://html-ai-template.moestaging.com",
+    "referer": "https://html-ai-template.moestaging.com/inapp/create/",
     "page": "inapp/create/",
     "priority": "u=1, i",
     "refreshtoken": "6f96f623-fd71-4039-94b6-9584cf46bb26",
